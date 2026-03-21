@@ -52,10 +52,18 @@ function saveDatabase(): void {
 async function initDatabase(): Promise<void> {
   const SQL = await initSqlJs({
     locateFile: (file: string) => {
-      if (is.dev) {
-        return join(__dirname, '../node_modules/sql.js/dist/', file)
+      // 尝试多个可能的路径
+      const paths = [
+        join(__dirname, '../node_modules/sql.js/dist/', file),
+        join(__dirname, '../../node_modules/sql.js/dist/', file),
+        join(app.getAppPath(), 'node_modules/sql.js/dist/', file),
+        join(process.resourcesPath, 'sql.js', file),
+        join(process.resourcesPath, 'app.asar.unpacked/node_modules/sql.js/dist/', file)
+      ]
+      for (const p of paths) {
+        if (existsSync(p)) return p
       }
-      return join(process.resourcesPath, 'app.asar.unpacked/node_modules/sql.js/dist/', file)
+      return paths[0]
     }
   })
   dbPath = join(app.getPath('userData'), 'reader.db')

@@ -7,8 +7,14 @@
   "files": [
     "dist/**/*",
     "dist-electron/**/*",
-    "!node_modules/**/*",
-    "node_modules/sql.js/dist/sql-wasm.wasm"
+    "!node_modules/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "node_modules/sql.js/dist/",
+      "to": "sql.js",
+      "filter": ["sql-wasm.wasm"]
+    }
   ],
   "artifactName": "${productName}-${version}-Setup.${ext}",
   "win": {
