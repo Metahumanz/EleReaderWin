@@ -115,8 +115,13 @@ async function initDatabase(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
-  await initDatabase()
   createWindow()
+
+  try {
+    await initDatabase()
+  } catch (error) {
+    console.error('Database init failed:', error)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
