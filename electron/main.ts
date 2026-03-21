@@ -53,14 +53,19 @@ function getWasmPath(): string {
   const wasmFileName = 'sql-wasm.wasm'
   const possiblePaths = [
     join(process.resourcesPath, 'sql.js', wasmFileName),
+    join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'sql.js', 'dist', wasmFileName),
     join(app.getAppPath(), 'node_modules/sql.js/dist/', wasmFileName),
+    join(process.cwd(), 'node_modules/sql.js/dist/', wasmFileName),
     join(__dirname, '../node_modules/sql.js/dist/', wasmFileName),
     join(__dirname, '../../node_modules/sql.js/dist/', wasmFileName)
   ]
   for (const p of possiblePaths) {
-    if (existsSync(p)) return p
+    if (existsSync(p)) {
+      console.log('Found WASM at:', p)
+      return p
+    }
   }
-  throw new Error(`WASM file not found. Tried: ${possiblePaths.join(', ')}`)
+  throw new Error(`WASM file not found. Tried paths:\n${possiblePaths.join('\n')}`)
 }
 
 async function initDatabase(): Promise<void> {
@@ -71,7 +76,8 @@ async function initDatabase(): Promise<void> {
   const wasmBuffer = readFileSync(wasmPath)
   console.log('WASM size:', wasmBuffer.length)
   
-  const SQL = await initSqlJs({ wasmBinary: new Uint8Array(wasmBuffer) })
+  // Use the underlying ArrayBuffer for initSqlJs
+  const SQL = await initSqlJs({ wasmBinary: wasmBuffer.buffer })
   dbPath = join(app.getPath('userData'), 'reader.db')
 
   if (existsSync(dbPath)) {

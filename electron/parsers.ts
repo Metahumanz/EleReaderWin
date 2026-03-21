@@ -76,7 +76,11 @@ export function parseTxt(filePath: string): Chapter[] {
 }
 
 export async function parseEpub(filePath: string): Promise<Chapter[]> {
-  const Epub = (await import('epubjs')).default
+  const epubModule = await import('epubjs')
+  const Epub = typeof epubModule === 'function' ? epubModule : (epubModule as any).default
+  if (typeof Epub !== 'function') {
+    throw new Error('Failed to import epubjs: default export is not a function')
+  }
   const book = Epub(filePath)
 
   await book.ready
