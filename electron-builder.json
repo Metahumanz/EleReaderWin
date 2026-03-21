@@ -6,7 +6,9 @@
   },
   "files": [
     "dist/**/*",
-    "dist-electron/**/*"
+    "dist-electron/**/*",
+    "!node_modules/**/*",
+    "node_modules/sql.js/dist/sql-wasm.wasm"
   ],
   "artifactName": "${productName}-${version}-Setup.${ext}",
   "win": {

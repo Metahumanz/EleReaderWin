@@ -50,7 +50,14 @@ function saveDatabase(): void {
 }
 
 async function initDatabase(): Promise<void> {
-  const SQL = await initSqlJs()
+  const SQL = await initSqlJs({
+    locateFile: (file: string) => {
+      if (is.dev) {
+        return join(__dirname, '../node_modules/sql.js/dist/', file)
+      }
+      return join(process.resourcesPath, 'app.asar.unpacked/node_modules/sql.js/dist/', file)
+    }
+  })
   dbPath = join(app.getPath('userData'), 'reader.db')
 
   if (existsSync(dbPath)) {
