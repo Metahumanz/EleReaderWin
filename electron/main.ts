@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
-import { join } from 'path'
+import { join, extname } from 'path'
 import { is } from '@electron-toolkit/utils'
 import Database from 'better-sqlite3'
+import { parseTxt, parseEpub } from './parsers'
 
 let mainWindow: BrowserWindow | null = null
 let db: Database.Database | null = null
@@ -41,9 +42,9 @@ function createWindow(): void {
 function initDatabase(): void {
   const dbPath = join(app.getPath('userData'), 'reader.db')
   db = new Database(dbPath)
-  
+
   db.pragma('journal_mode = WAL')
-  
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS books (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +57,7 @@ function initDatabase(): void {
       last_read DATETIME DEFAULT CURRENT_TIMESTAMP,
       source_id INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS chapters (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       book_id INTEGER NOT NULL,
@@ -66,12 +67,12 @@ function initDatabase(): void {
       link TEXT,
       FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
     );
-    
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
     );
-    
+
     CREATE TABLE IF NOT EXISTS replacement_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pattern TEXT NOT NULL,
@@ -118,6 +119,49 @@ ipcMain.handle('db:query', async (_, sql: string, params?: any[]) => {
   }
 })
 
+ipcMain.handle('db:importBook', async (_, filePath: string) => {
+  if (!db) throw new Error('Database not initialized')
+
+  try {
+    const ext = extname(filePath).toLowerCase()
+    const fileName = filePath.split(/[/\\]/).pop() || 'Unknown'
+    const title = fileName.replace(/\.[^/.]+$/, '')
+
+    const bookResult = db.prepare(
+      'INSERT INTO books (title, path, last_read) VALUES (?, ?, ?)'
+    ).run(title, filePath, new Date().toISOString())
+
+    const bookId = bookResult.lastInsertRowid as number
+
+    let chapters: { title: string; body: string; orderIndex: number }[]
+
+    if (ext === '.txt') {
+      chapters = parseTxt(filePath)
+    } else if (ext === '.epub') {
+      chapters = await parseEpub(filePath)
+    } else {
+      throw new Error(`Unsupported file format: ${ext}`)
+    }
+
+    const insertChapter = db.prepare(
+      'INSERT INTO chapters (book_id, title, body, order_index) VALUES (?, ?, ?, ?)'
+    )
+
+    const insertMany = db.transaction((chaps: typeof chapters) => {
+      for (const chapter of chaps) {
+        insertChapter.run(bookId, chapter.title, chapter.body, chapter.orderIndex)
+      }
+    })
+
+    insertMany(chapters)
+
+    return { bookId, chapterCount: chapters.length }
+  } catch (error) {
+    console.error('Import book error:', error)
+    throw error
+  }
+})
+
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openFile'],
@@ -126,11 +170,11 @@ ipcMain.handle('dialog:openFile', async () => {
       { name: 'All Files', extensions: ['*'] }
     ]
   })
-  
+
   if (result.canceled) {
     return null
   }
-  
+
   return result.filePaths[0]
 })
 

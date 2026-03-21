@@ -9,6 +9,7 @@ declare module '*.vue' {
 interface ElectronAPI {
   db: {
     query: (sql: string, params?: any[]) => Promise<any>
+    importBook: (filePath: string) => Promise<{ bookId: number; chapterCount: number }>
   }
   dialog: {
     openFile: () => Promise<string | null>
