@@ -49,23 +49,25 @@ function saveDatabase(): void {
   }
 }
 
+function getWasmPath(): string {
+  const wasmFileName = 'sql-wasm.wasm'
+  const possiblePaths = [
+    join(process.resourcesPath, 'sql.js', wasmFileName),
+    join(app.getAppPath(), 'node_modules/sql.js/dist/', wasmFileName),
+    join(__dirname, '../node_modules/sql.js/dist/', wasmFileName),
+    join(__dirname, '../../node_modules/sql.js/dist/', wasmFileName)
+  ]
+  for (const p of possiblePaths) {
+    if (existsSync(p)) return p
+  }
+  throw new Error(`WASM file not found. Tried: ${possiblePaths.join(', ')}`)
+}
+
 async function initDatabase(): Promise<void> {
-  const SQL = await initSqlJs({
-    locateFile: (file: string) => {
-      // 尝试多个可能的路径
-      const paths = [
-        join(__dirname, '../node_modules/sql.js/dist/', file),
-        join(__dirname, '../../node_modules/sql.js/dist/', file),
-        join(app.getAppPath(), 'node_modules/sql.js/dist/', file),
-        join(process.resourcesPath, 'sql.js', file),
-        join(process.resourcesPath, 'app.asar.unpacked/node_modules/sql.js/dist/', file)
-      ]
-      for (const p of paths) {
-        if (existsSync(p)) return p
-      }
-      return paths[0]
-    }
-  })
+  const wasmPath = getWasmPath()
+  const wasmBinary = readFileSync(wasmPath)
+  
+  const SQL = await initSqlJs({ wasmBinary })
   dbPath = join(app.getPath('userData'), 'reader.db')
 
   if (existsSync(dbPath)) {
@@ -127,8 +129,10 @@ app.whenReady().then(async () => {
 
   try {
     await initDatabase()
+    console.log('Database initialized successfully')
   } catch (error) {
     console.error('Database init failed:', error)
+    dialog.showErrorBox('数据库初始化失败', String(error))
   }
 
   app.on('activate', () => {
