@@ -6,7 +6,7 @@ declare module '*.vue' {
   export default component
 }
 
-interface ElectronAPI {
+export interface ElectronAPI {
   db: {
     query: (sql: string, params?: any[]) => Promise<any>
     importBook: (filePath: string) => Promise<{ bookId: number; chapterCount: number }>
