@@ -8,6 +8,7 @@
     "dist/**/*",
     "dist-electron/**/*"
   ],
+  "artifactName": "${productName}-${version}-Setup.${ext}",
   "win": {
     "target": "nsis",
     "icon": "public/icon.png"

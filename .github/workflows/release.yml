@@ -1,5 +1,8 @@
 name: Release
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     tags:
@@ -35,7 +38,6 @@ jobs:
           name: EleWinReader
           path: |
             release/*.exe
-            release/*.msi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -45,9 +47,6 @@ jobs:
           body: |
             ## EleWinReader ${{ github.ref_name }}
 
-            ### 下载链接
-            - **Windows**: 安装包 (exe/msi)
-
             ### 更新内容
             请查看 [Commit 历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}) 获取详细更新内容。
           draft: false
@@ -55,6 +54,6 @@ jobs:
           make_latest: true
           files: |
             release/*.exe
-            release/*.msi
+            release/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
