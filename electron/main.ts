@@ -1,11 +1,13 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join, extname } from 'path'
 import { is } from '@electron-toolkit/utils'
-import Database from 'better-sqlite3'
+import initSqlJs, { Database } from 'sql.js'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { parseTxt, parseEpub } from './parsers'
 
 let mainWindow: BrowserWindow | null = null
-let db: Database.Database | null = null
+let db: Database | null = null
+let dbPath: string = ''
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -39,13 +41,26 @@ function createWindow(): void {
   }
 }
 
-function initDatabase(): void {
-  const dbPath = join(app.getPath('userData'), 'reader.db')
-  db = new Database(dbPath)
+function saveDatabase(): void {
+  if (db) {
+    const data = db.export()
+    const buffer = Buffer.from(data)
+    writeFileSync(dbPath, buffer)
+  }
+}
 
-  db.pragma('journal_mode = WAL')
+async function initDatabase(): Promise<void> {
+  const SQL = await initSqlJs()
+  dbPath = join(app.getPath('userData'), 'reader.db')
 
-  db.exec(`
+  if (existsSync(dbPath)) {
+    const buffer = readFileSync(dbPath)
+    db = new SQL.Database(buffer)
+  } else {
+    db = new SQL.Database()
+  }
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS books (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -56,8 +71,10 @@ function initDatabase(): void {
       progress_offset INTEGER DEFAULT 0,
       last_read DATETIME DEFAULT CURRENT_TIMESTAMP,
       source_id INTEGER
-    );
+    )
+  `)
 
+  db.run(`
     CREATE TABLE IF NOT EXISTS chapters (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       book_id INTEGER NOT NULL,
@@ -66,13 +83,17 @@ function initDatabase(): void {
       order_index INTEGER NOT NULL,
       link TEXT,
       FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
-    );
+    )
+  `)
 
+  db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
-    );
+    )
+  `)
 
+  db.run(`
     CREATE TABLE IF NOT EXISTS replacement_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pattern TEXT NOT NULL,
@@ -80,12 +101,14 @@ function initDatabase(): void {
       scope TEXT NOT NULL DEFAULT 'global',
       is_regex INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1
-    );
+    )
   `)
+
+  saveDatabase()
 }
 
-app.whenReady().then(() => {
-  initDatabase()
+app.whenReady().then(async () => {
+  await initDatabase()
   createWindow()
 
   app.on('activate', () => {
@@ -96,9 +119,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (db) {
-    db.close()
-  }
+  saveDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -107,11 +128,24 @@ app.on('window-all-closed', () => {
 ipcMain.handle('db:query', async (_, sql: string, params?: any[]) => {
   if (!db) throw new Error('Database not initialized')
   try {
-    const stmt = db.prepare(sql)
-    if (sql.trim().toUpperCase().startsWith('SELECT')) {
-      return stmt.all(...(params || []))
+    const trimmedSql = sql.trim().toUpperCase()
+    if (trimmedSql.startsWith('SELECT')) {
+      const result = db.exec(sql, params || [])
+      if (result.length === 0) return []
+      const { columns, values } = result[0]
+      return values.map(row => {
+        const obj: any = {}
+        columns.forEach((col, i) => { obj[col] = row[i] })
+        return obj
+      })
     } else {
-      return stmt.run(...(params || []))
+      db.run(sql, params || [])
+      saveDatabase()
+      const lastIdResult = db.exec('SELECT last_insert_rowid() as id')
+      return { 
+        lastInsertRowid: lastIdResult[0]?.values[0]?.[0] || 0,
+        changes: db.getRowsModified()
+      }
     }
   } catch (error) {
     console.error('Database query error:', error)
@@ -127,11 +161,13 @@ ipcMain.handle('db:importBook', async (_, filePath: string) => {
     const fileName = filePath.split(/[/\\]/).pop() || 'Unknown'
     const title = fileName.replace(/\.[^/.]+$/, '')
 
-    const bookResult = db.prepare(
-      'INSERT INTO books (title, path, last_read) VALUES (?, ?, ?)'
-    ).run(title, filePath, new Date().toISOString())
+    db.run(
+      'INSERT INTO books (title, path, last_read) VALUES (?, ?, ?)',
+      [title, filePath, new Date().toISOString()]
+    )
 
-    const bookId = bookResult.lastInsertRowid as number
+    const result = db.exec('SELECT last_insert_rowid() as id')
+    const bookId = result[0].values[0][0] as number
 
     let chapters: { title: string; body: string; orderIndex: number }[]
 
@@ -143,17 +179,14 @@ ipcMain.handle('db:importBook', async (_, filePath: string) => {
       throw new Error(`Unsupported file format: ${ext}`)
     }
 
-    const insertChapter = db.prepare(
-      'INSERT INTO chapters (book_id, title, body, order_index) VALUES (?, ?, ?, ?)'
-    )
+    for (const chapter of chapters) {
+      db.run(
+        'INSERT INTO chapters (book_id, title, body, order_index) VALUES (?, ?, ?, ?)',
+        [bookId, chapter.title, chapter.body, chapter.orderIndex]
+      )
+    }
 
-    const insertMany = db.transaction((chaps: typeof chapters) => {
-      for (const chapter of chaps) {
-        insertChapter.run(bookId, chapter.title, chapter.body, chapter.orderIndex)
-      }
-    })
-
-    insertMany(chapters)
+    saveDatabase()
 
     return { bookId, chapterCount: chapters.length }
   } catch (error) {
