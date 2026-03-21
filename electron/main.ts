@@ -65,9 +65,13 @@ function getWasmPath(): string {
 
 async function initDatabase(): Promise<void> {
   const wasmPath = getWasmPath()
-  const wasmBinary = readFileSync(wasmPath)
+  console.log('WASM path:', wasmPath)
+  console.log('WASM exists:', existsSync(wasmPath))
   
-  const SQL = await initSqlJs({ wasmBinary })
+  const wasmBuffer = readFileSync(wasmPath)
+  console.log('WASM size:', wasmBuffer.length)
+  
+  const SQL = await initSqlJs({ wasmBinary: new Uint8Array(wasmBuffer) })
   dbPath = join(app.getPath('userData'), 'reader.db')
 
   if (existsSync(dbPath)) {
