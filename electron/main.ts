@@ -121,8 +121,12 @@ async function initDatabase(): Promise<void> {
   db.run(`CREATE TABLE IF NOT EXISTS replacement_rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pattern TEXT NOT NULL, replacement TEXT NOT NULL,
-    scope TEXT NOT NULL DEFAULT 'global', is_regex INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1
+    scope TEXT NOT NULL DEFAULT 'global', book_id INTEGER,
+    is_regex INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE
   )`)
+  // Migration: add book_id column if missing (existing DBs)
+  try { db.run('ALTER TABLE replacement_rules ADD COLUMN book_id INTEGER') } catch (_) {}
   saveDatabase()
 }
 

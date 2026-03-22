@@ -52,6 +52,7 @@ const addBook = async () => {
 const deleteBook = async (bookId: number) => {
   if (!confirm('确定要删除这本书吗？')) return
   try {
+    await window.electronAPI.db.query('DELETE FROM replacement_rules WHERE book_id = ?', [bookId])
     await window.electronAPI.db.query('DELETE FROM chapters WHERE book_id = ?', [bookId])
     await window.electronAPI.db.query('DELETE FROM books WHERE id = ?', [bookId])
     await fetchBooks()

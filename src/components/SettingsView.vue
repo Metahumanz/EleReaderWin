@@ -7,6 +7,8 @@ const emit = defineEmits<{
 }>()
 
 interface Setting { key: string; value: string }
+interface ReplacementRule { id: number; pattern: string; replacement: string; scope: string; book_id: number | null; is_regex: number; active: number }
+interface Book { id: number; title: string }
 
 const bgImage = ref('')
 const bgPreview = ref('')
@@ -14,6 +16,11 @@ const appVersion = ref('')
 const updateStatus = ref('')
 const updateDetail = ref('')
 const updateReady = ref(false)
+
+// Replacement rules
+const allRules = ref<ReplacementRule[]>([])
+const books = ref<Book[]>([])
+const ruleFilter = ref<'all' | 'global' | 'book'>('all')
 
 const loadSettings = async () => {
   try {
@@ -63,8 +70,51 @@ const installNow = () => {
   window.electronAPI.updater.install()
 }
 
+// Replacement rules management
+const fetchAllRules = async () => {
+  try {
+    const r = await window.electronAPI.db.query('SELECT * FROM replacement_rules ORDER BY id')
+    allRules.value = r as ReplacementRule[]
+  } catch (e) { console.error(e) }
+}
+
+const fetchBooks = async () => {
+  try {
+    const r = await window.electronAPI.db.query('SELECT id, title FROM books ORDER BY title')
+    books.value = r as Book[]
+  } catch (e) { console.error(e) }
+}
+
+const filteredRules = () => {
+  if (ruleFilter.value === 'all') return allRules.value
+  if (ruleFilter.value === 'global') return allRules.value.filter(r => r.scope === 'global')
+  return allRules.value.filter(r => r.scope === 'book')
+}
+
+const getBookTitle = (bookId: number | null) => {
+  if (!bookId) return ''
+  const b = books.value.find(b => b.id === bookId)
+  return b ? b.title : `#${bookId}`
+}
+
+const deleteRule = async (id: number) => {
+  try {
+    await window.electronAPI.db.query('DELETE FROM replacement_rules WHERE id = ?', [id])
+    await fetchAllRules()
+  } catch (e) { console.error(e) }
+}
+
+const toggleRuleActive = async (rule: ReplacementRule) => {
+  try {
+    await window.electronAPI.db.query('UPDATE replacement_rules SET active = ? WHERE id = ?', [rule.active ? 0 : 1, rule.id])
+    await fetchAllRules()
+  } catch (e) { console.error(e) }
+}
+
 onMounted(async () => {
   loadSettings()
+  fetchAllRules()
+  fetchBooks()
   try { appVersion.value = await window.electronAPI.app.getVersion() } catch (_) { appVersion.value = '?.?.?' }
   window.electronAPI.updater.onStatus((data) => {
     switch (data.status) {
@@ -116,6 +166,61 @@ onMounted(async () => {
         </div>
         <div v-if="bgImage" class="mt-3">
           <button @click="clearBgImage" class="text-xs text-red-400 hover:text-red-300 transition-colors">✕ 清除背景</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Replacement Rules -->
+    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
+      <div class="flex items-center gap-3 mb-2"><span class="text-xl">📝</span><h3 class="text-lg font-bold">替换规则管理</h3></div>
+      <p class="text-sm text-slate-400">管理所有替换规则。可在阅读界面中针对单本书或全局添加规则。</p>
+
+      <div class="flex gap-2 mb-4">
+        <button @click="ruleFilter='all'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                :class="ruleFilter==='all' ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'">全部 ({{ allRules.length }})</button>
+        <button @click="ruleFilter='global'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                :class="ruleFilter==='global' ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'">全局</button>
+        <button @click="ruleFilter='book'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                :class="ruleFilter==='book' ? 'bg-sky-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'">特定书籍</button>
+      </div>
+
+      <div v-if="filteredRules().length === 0" class="text-center py-8">
+        <p class="text-slate-500 text-sm">暂无替换规则</p>
+        <p class="text-slate-600 text-xs mt-1">在阅读界面菜单中点击「📝 替换」按钮添加</p>
+      </div>
+
+      <div v-else class="space-y-3">
+        <div v-for="rule in filteredRules()" :key="rule.id"
+             class="flex items-start gap-4 p-4 rounded-xl border transition-all"
+             :class="rule.active ? 'bg-white/3 border-white/8' : 'bg-white/[0.01] border-white/[0.03] opacity-40'">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span class="text-amber-400 font-semibold text-sm break-all">{{ rule.pattern }}</span>
+              <span class="text-white/20 text-xs">→</span>
+              <span class="text-emerald-400 font-semibold text-sm break-all">{{ rule.replacement || '(删除)' }}</span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded"
+                    :class="rule.scope === 'global' ? 'bg-purple-500/15 text-purple-400' : 'bg-sky-500/15 text-sky-400'">
+                {{ rule.scope === 'global' ? '全局' : '本书' }}
+              </span>
+              <span v-if="rule.scope === 'book' && rule.book_id" class="text-[10px] text-slate-500">
+                📖 {{ getBookTitle(rule.book_id) }}
+              </span>
+              <span v-if="rule.is_regex" class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-400">正则</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button @click="toggleRuleActive(rule)"
+                    class="px-3 py-1 rounded-lg text-xs font-bold transition-all border"
+                    :class="rule.active ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10' : 'border-white/10 text-slate-500 hover:bg-white/5'">
+              {{ rule.active ? '已启用' : '已禁用' }}
+            </button>
+            <button @click="deleteRule(rule.id)"
+                    class="px-3 py-1 rounded-lg text-xs font-bold text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20">
+              删除
+            </button>
+          </div>
         </div>
       </div>
     </section>

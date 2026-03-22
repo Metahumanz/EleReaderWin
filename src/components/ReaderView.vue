@@ -3,6 +3,8 @@ import { ref, onMounted, watch, computed, onUnmounted, nextTick } from 'vue'
 
 interface Chapter { id: number; title: string; body: string; order_index: number }
 interface Book { id: number; title: string; author: string | null; path: string; progress_index: number; progress_offset: number }
+interface ReplacementRule { id: number; pattern: string; replacement: string; scope: string; book_id: number | null; is_regex: number; active: number }
+interface SearchResult { chapterIndex: number; chapterTitle: string; snippet: string }
 
 const props = defineProps<{ bookId: number }>()
 const emit = defineEmits<{
@@ -17,6 +19,8 @@ const loading = ref(true)
 const showMenu = ref(false)
 const showStyling = ref(false)
 const showToc = ref(false)
+const showSearch = ref(false)
+const showRules = ref(false)
 const isImmersive = ref(false)
 const bgImage = ref('')
 
@@ -54,6 +58,18 @@ const suppressAnim = ref(false) // suppress translateX transition during chapter
 const coverDir = ref<'' | 'cover-left' | 'cover-right'>('')
 
 let flipLock = false
+
+// Search
+const searchQuery = ref('')
+const searchResults = ref<SearchResult[]>([])
+const searching = ref(false)
+
+// Replacement rules
+const rules = ref<ReplacementRule[]>([])
+const newPattern = ref('')
+const newReplacement = ref('')
+const newScope = ref<'book' | 'global'>('book')
+const newIsRegex = ref(false)
 
 // ---- Data ----
 const fetchBook = async () => {
@@ -110,6 +126,95 @@ const setFlipMode = (mode: 'slide' | 'cover') => {
   saveSetting('reader_flipMode', mode)
 }
 
+// ---- Replacement rules ----
+const fetchRules = async () => {
+  try {
+    const r = await window.electronAPI.db.query(
+      'SELECT * FROM replacement_rules WHERE (scope = ? AND book_id IS NULL) OR (scope = ? AND book_id = ?) ORDER BY id',
+      ['global', 'book', props.bookId]
+    )
+    rules.value = r as ReplacementRule[]
+  } catch (e) { console.error(e) }
+}
+
+const addRule = async () => {
+  if (!newPattern.value.trim()) return
+  try {
+    await window.electronAPI.db.query(
+      'INSERT INTO replacement_rules (pattern, replacement, scope, book_id, is_regex, active) VALUES (?, ?, ?, ?, ?, 1)',
+      [newPattern.value, newReplacement.value, newScope.value, newScope.value === 'book' ? props.bookId : null, newIsRegex.value ? 1 : 0]
+    )
+    newPattern.value = ''
+    newReplacement.value = ''
+    newIsRegex.value = false
+    await fetchRules()
+    recalc()
+  } catch (e) { console.error(e) }
+}
+
+const deleteRule = async (id: number) => {
+  try {
+    await window.electronAPI.db.query('DELETE FROM replacement_rules WHERE id = ?', [id])
+    await fetchRules()
+    recalc()
+  } catch (e) { console.error(e) }
+}
+
+const toggleRuleActive = async (rule: ReplacementRule) => {
+  try {
+    await window.electronAPI.db.query('UPDATE replacement_rules SET active = ? WHERE id = ?', [rule.active ? 0 : 1, rule.id])
+    await fetchRules()
+    recalc()
+  } catch (e) { console.error(e) }
+}
+
+const applyReplacements = (html: string): string => {
+  if (!html) return html
+  let result = html
+  for (const rule of rules.value) {
+    if (!rule.active) continue
+    try {
+      if (rule.is_regex) {
+        const re = new RegExp(rule.pattern, 'g')
+        result = result.replace(re, rule.replacement)
+      } else {
+        // Plain text replacement — escape for safety and replace all
+        const escaped = rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        result = result.replace(new RegExp(escaped, 'g'), rule.replacement)
+      }
+    } catch (_) { /* skip broken regex */ }
+  }
+  return result
+}
+
+// ---- Search ----
+const doSearch = async () => {
+  const q = searchQuery.value.trim()
+  if (!q) { searchResults.value = []; return }
+  searching.value = true
+  try {
+    const results: SearchResult[] = []
+    for (let i = 0; i < chapters.value.length; i++) {
+      const ch = chapters.value[i]
+      // Strip HTML tags for plain text search
+      const plain = ch.body.replace(/<[^>]+>/g, '')
+      const idx = plain.toLowerCase().indexOf(q.toLowerCase())
+      if (idx >= 0) {
+        const start = Math.max(0, idx - 20)
+        const end = Math.min(plain.length, idx + q.length + 40)
+        const snippet = (start > 0 ? '...' : '') + plain.substring(start, end) + (end < plain.length ? '...' : '')
+        results.push({ chapterIndex: i, chapterTitle: ch.title, snippet })
+      }
+    }
+    searchResults.value = results
+  } catch (e) { console.error(e) }
+  searching.value = false
+}
+
+const jumpToSearchResult = (idx: number) => {
+  goToChapter(idx, true)
+}
+
 // ---- Pagination ----
 const recalc = () => { nextTick(() => { setTimeout(calculatePages, 60) }) }
 const calculatePages = () => {
@@ -144,10 +249,14 @@ const saveProgress = async () => {
   } catch (e) { console.error(e) }
 }
 
-// Chapter data
+// Chapter data with replacements applied
 const currentChapterData = computed(() => chapters.value[currentChapterIndex.value] || null)
 const prevChapterData = computed(() => { const i = currentChapterIndex.value - 1; return i >= 0 ? chapters.value[i] : null })
 const nextChapterData = computed(() => { const i = currentChapterIndex.value + 1; return i < chapters.value.length ? chapters.value[i] : null })
+
+const currentBody = computed(() => currentChapterData.value ? applyReplacements(currentChapterData.value.body) : '')
+const prevBody = computed(() => prevChapterData.value ? applyReplacements(prevChapterData.value.body) : '')
+const nextBody = computed(() => nextChapterData.value ? applyReplacements(nextChapterData.value.body) : '')
 
 // ---- Carousel chapter transition ----
 const slideToNextChapter = () => {
@@ -237,12 +346,12 @@ const prevPage = () => {
 }
 
 // ---- Interaction ----
-const closeAll = () => { showMenu.value = false; showStyling.value = false; showToc.value = false }
+const closeAll = () => { showMenu.value = false; showStyling.value = false; showToc.value = false; showSearch.value = false; showRules.value = false }
 
 const handleClick = (e: MouseEvent) => {
   const t = e.target as HTMLElement
   if (t.closest('.m-top') || t.closest('.m-bot') || t.closest('.m-info') ||
-      t.closest('.sty-p') || t.closest('.toc-p')) return
+      t.closest('.sty-p') || t.closest('.toc-p') || t.closest('.search-p') || t.closest('.rules-p')) return
   if (showMenu.value) { closeAll(); return }
   const x = e.clientX, w = window.innerWidth
   if (x < w * 0.3) prevPage()
@@ -308,6 +417,13 @@ const textStyle = computed(() => ({
 
 const carouselTransform = computed(() => `translateX(${-100 + carouselPos.value * -100}vw)`)
 
+const openPanel = (panel: 'toc' | 'styling' | 'search' | 'rules') => {
+  showToc.value = panel === 'toc' ? !showToc.value : false
+  showStyling.value = panel === 'styling' ? !showStyling.value : false
+  showSearch.value = panel === 'search' ? !showSearch.value : false
+  showRules.value = panel === 'rules' ? !showRules.value : false
+}
+
 watch(showToc, (v) => {
   if (v) nextTick(() => {
     const el = tocListRef.value?.querySelector('.toc-active') as HTMLElement
@@ -322,7 +438,7 @@ watch([fontSize, lineHeight, letterSpacing, marginX, marginY, fontFamily, fontWe
 watch(currentPage, () => saveProgress())
 
 onMounted(async () => {
-  await loadSettings(); await fetchBook(); await fetchChapters()
+  await loadSettings(); await fetchBook(); await fetchChapters(); await fetchRules()
   loading.value = false
   setTimeout(calculatePages, 300)
   window.addEventListener('resize', recalc)
@@ -355,7 +471,7 @@ onUnmounted(() => {
               columnGap: `${marginX * 2}px`, columnFill: 'auto',
             }" v-if="prevChapterData">
               <h2 class="ch-title" :style="{ fontSize: (fontSize*1.4)+'px', color: fontColor }">{{ prevChapterData.title }}</h2>
-              <div v-html="prevChapterData.body" class="ch-body"></div>
+              <div v-html="prevBody" class="ch-body"></div>
             </div>
           </div>
         </div>
@@ -370,7 +486,7 @@ onUnmounted(() => {
               columnGap: `${marginX * 2}px`, columnFill: 'auto',
             }">
               <h2 class="ch-title" :style="{ fontSize: (fontSize*1.4)+'px', color: fontColor }">{{ currentChapterData?.title }}</h2>
-              <div v-html="currentChapterData?.body" class="ch-body"></div>
+              <div v-html="currentBody" class="ch-body"></div>
             </div>
           </div>
         </div>
@@ -380,7 +496,7 @@ onUnmounted(() => {
           <div class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px` }">
             <div class="pg-ct" :style="textStyle" v-if="nextChapterData">
               <h2 class="ch-title" :style="{ fontSize: (fontSize*1.4)+'px', color: fontColor }">{{ nextChapterData.title }}</h2>
-              <div v-html="nextChapterData.body" class="ch-body"></div>
+              <div v-html="nextBody" class="ch-body"></div>
             </div>
           </div>
         </div>
@@ -400,8 +516,10 @@ onUnmounted(() => {
             <div class="m-title">{{ book?.title }}</div>
             <div class="m-acts">
               <button @click="toggleImmersiveMode" class="m-btn">{{ isImmersive ? '退出全屏' : '全屏' }}</button>
-              <button @click="showToc=!showToc;if(showToc)showStyling=false" class="m-btn" :class="{active:showToc}">☰ 目录</button>
-              <button @click="showStyling=!showStyling;if(showStyling)showToc=false" class="m-btn" :class="{active:showStyling}">Aa 排版</button>
+              <button @click="openPanel('search')" class="m-btn" :class="{active:showSearch}">🔍 搜索</button>
+              <button @click="openPanel('toc')" class="m-btn" :class="{active:showToc}">☰ 目录</button>
+              <button @click="openPanel('rules')" class="m-btn" :class="{active:showRules}">📝 替换</button>
+              <button @click="openPanel('styling')" class="m-btn" :class="{active:showStyling}">Aa 排版</button>
             </div>
           </div>
           <div class="m-bot" @click.stop>
@@ -421,6 +539,26 @@ onUnmounted(() => {
             </span>
           </div>
 
+          <!-- Search panel -->
+          <Transition name="sf">
+            <div v-if="showSearch" class="search-p" @click.stop @wheel.stop>
+              <div class="ph"><span class="pt">全文搜索</span><button @click="showSearch=false" class="px">✕</button></div>
+              <div class="search-input-row">
+                <input type="text" v-model="searchQuery" @keydown.enter="doSearch" placeholder="输入关键词..." class="search-input" />
+                <button @click="doSearch" class="search-go" :disabled="searching">{{ searching ? '...' : '搜索' }}</button>
+              </div>
+              <div v-if="searchResults.length > 0" class="search-count">找到 {{ searchResults.length }} 个结果</div>
+              <div v-else-if="searchQuery && !searching" class="search-count empty">未找到匹配内容</div>
+              <div class="search-list">
+                <button v-for="sr in searchResults" :key="sr.chapterIndex" @click="jumpToSearchResult(sr.chapterIndex)" class="search-item">
+                  <span class="sr-ch">{{ sr.chapterTitle }}</span>
+                  <span class="sr-snip">{{ sr.snippet }}</span>
+                </button>
+              </div>
+            </div>
+          </Transition>
+
+          <!-- TOC -->
           <Transition name="sf">
             <div v-if="showToc" class="toc-p" @click.stop @wheel.stop>
               <div class="ph"><span class="pt">目录</span><button @click="showToc=false" class="px">✕</button></div>
@@ -432,6 +570,48 @@ onUnmounted(() => {
             </div>
           </Transition>
 
+          <!-- Replacement rules panel -->
+          <Transition name="sf">
+            <div v-if="showRules" class="rules-p" @click.stop @wheel.stop>
+              <div class="ph"><span class="pt">替换规则</span><button @click="showRules=false" class="px">✕</button></div>
+              <!-- Add rule form -->
+              <div class="rule-form">
+                <input type="text" v-model="newPattern" placeholder="查找内容..." class="rule-input" />
+                <input type="text" v-model="newReplacement" placeholder="替换为..." class="rule-input" />
+                <div class="rule-opts">
+                  <label class="rule-scope-opt">
+                    <input type="radio" value="book" v-model="newScope" /> 本书
+                  </label>
+                  <label class="rule-scope-opt">
+                    <input type="radio" value="global" v-model="newScope" /> 全局
+                  </label>
+                  <label class="rule-regex-opt">
+                    <input type="checkbox" v-model="newIsRegex" /> 正则
+                  </label>
+                  <button @click="addRule" class="rule-add-btn" :disabled="!newPattern.trim()">+ 添加</button>
+                </div>
+              </div>
+              <!-- Rules list -->
+              <div class="rules-list">
+                <div v-if="rules.length === 0" class="rules-empty">暂无替换规则</div>
+                <div v-for="rule in rules" :key="rule.id" class="rule-item" :class="{ inactive: !rule.active }">
+                  <div class="rule-content">
+                    <span class="rule-pattern">{{ rule.pattern }}</span>
+                    <span class="rule-arrow">→</span>
+                    <span class="rule-repl">{{ rule.replacement || '(删除)' }}</span>
+                  </div>
+                  <div class="rule-meta">
+                    <span class="rule-badge" :class="rule.scope">{{ rule.scope === 'global' ? '全局' : '本书' }}</span>
+                    <span v-if="rule.is_regex" class="rule-badge regex">正则</span>
+                    <button @click="toggleRuleActive(rule)" class="rule-toggle" :title="rule.active ? '禁用' : '启用'">{{ rule.active ? '✓' : '○' }}</button>
+                    <button @click="deleteRule(rule.id)" class="rule-del" title="删除">✕</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Transition>
+
+          <!-- Styling panel -->
           <Transition name="sf">
             <div v-if="showStyling" class="sty-p" @click.stop @wheel.stop>
               <div class="ph"><span class="pt">排版设置</span><button @click="showStyling=false" class="px">✕</button></div>
@@ -526,6 +706,25 @@ onUnmounted(() => {
 .ft-btn:hover { color:rgba(255,255,255,0.7); }
 .ftActive { background:#3b82f6!important; border-color:#3b82f6!important; color:white!important; }
 
+/* Search panel */
+.search-p { position:absolute; left:20px; top:60px; bottom:120px; width:360px; background:rgba(15,23,42,0.95); backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:16px; z-index:60; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column; }
+.search-input-row { display:flex; gap:8px; margin-bottom:12px; }
+.search-input { flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:8px 14px; font-size:13px; color:white; outline:none; transition:border-color .2s; }
+.search-input:focus { border-color:#3b82f6; }
+.search-input::placeholder { color:rgba(255,255,255,0.3); }
+.search-go { padding:8px 16px; border-radius:10px; font-size:12px; font-weight:700; background:#3b82f6; border:none; color:white; cursor:pointer; transition:all .2s; white-space:nowrap; }
+.search-go:hover { background:#2563eb; }
+.search-go:disabled { opacity:0.5; }
+.search-count { font-size:11px; color:rgba(255,255,255,0.4); margin-bottom:8px; font-weight:600; }
+.search-count.empty { color:rgba(255,255,255,0.25); }
+.search-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+.search-list::-webkit-scrollbar { width:4px; }
+.search-list::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:2px; }
+.search-item { display:flex; flex-direction:column; gap:4px; padding:10px 12px; border-radius:10px; border:none; background:transparent; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer; text-align:left; transition:all .15s; }
+.search-item:hover { background:rgba(59,130,246,0.12); color:white; }
+.sr-ch { font-weight:700; font-size:12px; color:#60a5fa; }
+.sr-snip { font-size:11px; opacity:0.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
 /* TOC */
 .toc-p { position:absolute; left:20px; top:60px; bottom:120px; width:300px; background:rgba(15,23,42,0.95); backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:16px; z-index:60; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column; }
 .toc-l { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
@@ -536,6 +735,38 @@ onUnmounted(() => {
 .toc-active { background:rgba(59,130,246,0.15)!important; color:#60a5fa!important; font-weight:700; }
 .ti { font-size:10px; opacity:0.4; min-width:24px; font-family:monospace; }
 .tn { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Replacement rules panel */
+.rules-p { position:absolute; right:20px; top:60px; bottom:120px; width:380px; background:rgba(15,23,42,0.95); backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:16px; z-index:60; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column; overflow:hidden; }
+.rule-form { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.06); }
+.rule-input { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:8px 14px; font-size:13px; color:white; outline:none; transition:border-color .2s; }
+.rule-input:focus { border-color:#3b82f6; }
+.rule-input::placeholder { color:rgba(255,255,255,0.3); }
+.rule-opts { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.rule-scope-opt, .rule-regex-opt { font-size:12px; color:rgba(255,255,255,0.5); display:flex; align-items:center; gap:4px; cursor:pointer; }
+.rule-scope-opt input, .rule-regex-opt input { accent-color:#3b82f6; }
+.rule-add-btn { margin-left:auto; padding:6px 16px; border-radius:8px; font-size:12px; font-weight:700; background:#3b82f6; border:none; color:white; cursor:pointer; transition:all .2s; }
+.rule-add-btn:hover { background:#2563eb; }
+.rule-add-btn:disabled { opacity:0.3; cursor:default; }
+.rules-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+.rules-list::-webkit-scrollbar { width:4px; }
+.rules-list::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:2px; }
+.rules-empty { text-align:center; padding:24px; font-size:12px; color:rgba(255,255,255,0.2); }
+.rule-item { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px 12px; transition:all .15s; }
+.rule-item.inactive { opacity:0.4; }
+.rule-content { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:13px; }
+.rule-pattern { color:#f59e0b; font-weight:600; word-break:break-all; }
+.rule-arrow { color:rgba(255,255,255,0.2); font-size:12px; flex-shrink:0; }
+.rule-repl { color:#34d399; font-weight:600; word-break:break-all; }
+.rule-meta { display:flex; align-items:center; gap:6px; }
+.rule-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; }
+.rule-badge.global { background:rgba(139,92,246,0.15); color:#a78bfa; }
+.rule-badge.book { background:rgba(59,130,246,0.15); color:#60a5fa; }
+.rule-badge.regex { background:rgba(245,158,11,0.15); color:#fbbf24; }
+.rule-toggle { background:none; border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.4); font-size:12px; cursor:pointer; padding:2px 8px; border-radius:6px; margin-left:auto; transition:all .15s; }
+.rule-toggle:hover { color:white; border-color:rgba(255,255,255,0.3); }
+.rule-del { background:none; border:none; color:rgba(239,68,68,0.5); font-size:14px; cursor:pointer; padding:2px 6px; transition:all .15s; }
+.rule-del:hover { color:#ef4444; }
 
 /* Styling */
 .sty-p { position:absolute; right:20px; top:60px; bottom:120px; width:340px; overflow-y:auto; background:rgba(15,23,42,0.95); backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:20px; z-index:60; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
