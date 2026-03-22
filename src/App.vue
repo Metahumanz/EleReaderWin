@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import BookshelfView from './components/BookshelfView.vue'
 import ReaderView from './components/ReaderView.vue'
 import SettingsView from './components/SettingsView.vue'
