@@ -29,6 +29,7 @@ const marginX = ref(60)
 const marginY = ref(40)
 const fontFamily = ref('system-ui')
 const fontColor = ref('#e2e8f0')
+const coverColor = ref('#0f172a')
 const systemFonts = ref<string[]>([])
 
 // Flip mode: 'slide' or 'cover'
@@ -84,6 +85,7 @@ const loadSettings = async () => {
         if (s.key === 'reader_marginY') marginY.value = parseInt(s.value) || 40
         if (s.key === 'reader_fontFamily') fontFamily.value = s.value || 'system-ui'
         if (s.key === 'reader_fontColor') fontColor.value = s.value || '#e2e8f0'
+        if (s.key === 'reader_coverColor') coverColor.value = s.value || '#0f172a'
         if (s.key === 'bgImage') bgImage.value = s.value || ''
         if (s.key === 'reader_flipMode') flipMode.value = (s.value === 'cover' ? 'cover' : 'slide')
       })
@@ -100,6 +102,7 @@ const updateStyling = () => {
   saveSetting('reader_letterSpacing', letterSpacing.value); saveSetting('reader_fontWeight', fontWeight.value)
   saveSetting('reader_marginX', marginX.value); saveSetting('reader_marginY', marginY.value)
   saveSetting('reader_fontFamily', fontFamily.value); saveSetting('reader_fontColor', fontColor.value)
+  saveSetting('reader_coverColor', coverColor.value)
   recalc()
 }
 const setFlipMode = (mode: 'slide' | 'cover') => {
@@ -284,6 +287,13 @@ const readerBgStyle = computed(() => {
   return { backgroundImage: `url('${bgImage.value}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
 })
 
+const coverOverlayStyle = computed(() => {
+  if (bgImage.value) {
+    return { backgroundImage: `url('${bgImage.value}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  }
+  return { backgroundColor: coverColor.value }
+})
+
 const textStyle = computed(() => ({
   fontFamily: fontFamily.value, fontSize: fontSize.value + 'px',
   lineHeight: String(lineHeight.value), letterSpacing: letterSpacing.value + 'em',
@@ -325,7 +335,7 @@ onUnmounted(() => {
 
     <template v-else>
       <!-- Cover animation overlay -->
-      <div v-if="coverDir" class="cover-overlay" :class="coverDir"></div>
+      <div v-if="coverDir" class="cover-overlay" :class="coverDir" :style="coverOverlayStyle"></div>
 
       <!-- Three-container carousel -->
       <div class="carousel" :class="{ sliding: carouselSliding }" :style="{ transform: carouselTransform }">
@@ -427,6 +437,7 @@ onUnmounted(() => {
               <div class="sr"><label>字间距</label><input type="range" min="-0.1" max="1" step="0.01" v-model.number="letterSpacing" @input="updateStyling" class="sl"><input type="number" v-model.number="letterSpacing" step="0.01" @change="updateStyling" class="sn"><span class="su">em</span></div>
               <div class="sr"><label>左右边距</label><input type="range" min="0" max="200" step="1" v-model.number="marginX" @input="updateStyling" class="sl"><input type="number" v-model.number="marginX" @change="updateStyling" class="sn"><span class="su">px</span></div>
               <div class="sr"><label>上下边距</label><input type="range" min="0" max="150" step="1" v-model.number="marginY" @input="updateStyling" class="sl"><input type="number" v-model.number="marginY" @change="updateStyling" class="sn"><span class="su">px</span></div>
+              <div class="sr"><label>翻页底色</label><input type="color" v-model="coverColor" @input="updateStyling" class="sc"><input type="text" v-model="coverColor" @change="updateStyling" class="sn w72"><small class="sw-note">*有背景图时自动适配</small></div>
             </div>
           </Transition>
         </div>
@@ -444,7 +455,7 @@ onUnmounted(() => {
 /* Cover overlay — opaque page that slides across to cover/reveal */
 .cover-overlay {
   position: absolute; inset: 0; z-index: 5; pointer-events: none;
-  background: #0f172a;
+  background-color: #0f172a;
 }
 .cover-overlay.cover-left {
   animation: coverSlideL 0.38s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
