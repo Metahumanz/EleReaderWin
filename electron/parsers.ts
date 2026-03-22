@@ -49,13 +49,21 @@ export function parseTxt(filePath: string): Chapter[] {
     const nextIndex = i + 1 < matches.length ? matches[i + 1].index : content.length
 
     const chunk = content.slice(lastIndex, index).trim()
-    if (chunk.length > 0 || i === 0) {
+    
+    // First chapter handling: if there's text BEFORE the first match, it's the prologue
+    if (i === 0 && chunk.length > 0) {
       chapters.push({
-        title: chapters.length === 0 ? '序章' : title,
-        body: (chapters.length === 0 ? chunk : content.slice(index, nextIndex).replace(title, '').trim()).replace(/\n/g, '<br/>'),
+        title: '序章',
+        body: chunk.replace(/\n/g, '<br/>'),
         orderIndex: chapters.length
       })
     }
+
+    chapters.push({
+      title: title,
+      body: content.slice(index, nextIndex).replace(title, '').trim().replace(/\n/g, '<br/>'),
+      orderIndex: chapters.length
+    })
 
     lastIndex = index
   }

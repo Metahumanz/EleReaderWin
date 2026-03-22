@@ -248,3 +248,30 @@ ipcMain.handle('dialog:openFile', async () => {
 ipcMain.handle('shell:openPath', async (_, path: string) => {
   return shell.openPath(path)
 })
+
+ipcMain.handle('win:setAspectRatio', async (_, ratio: number) => {
+  mainWindow?.setAspectRatio(ratio)
+  // Optionally resize to fit the ratio immediately
+  if (mainWindow) {
+    const [width, height] = mainWindow.getSize()
+    mainWindow.setSize(width, Math.round(width / ratio))
+  }
+})
+
+ipcMain.handle('win:setFullScreen', async (_, isFull: boolean) => {
+  mainWindow?.setFullScreen(isFull)
+})
+
+ipcMain.handle('font:getSystemFonts', async () => {
+  if (process.platform !== 'win32') return []
+  
+  const { execSync } = require('child_process')
+  try {
+    const cmd = '[System.Drawing.Text.InstalledFontCollection]::new().Families.Name'
+    const output = execSync(`powershell -command "${cmd}"`, { encoding: 'utf8' })
+    return output.split(/\r?\n/).filter(f => f.trim())
+  } catch (e) {
+    console.error('Failed to get fonts:', e)
+    return []
+  }
+})

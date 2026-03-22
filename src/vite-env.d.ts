@@ -17,6 +17,13 @@ export interface ElectronAPI {
   shell: {
     openPath: (path: string) => Promise<void>
   }
+  win: {
+    setAspectRatio: (ratio: number) => Promise<void>
+    setFullScreen: (isFull: boolean) => Promise<void>
+  }
+  font: {
+    getSystemFonts: () => Promise<string[]>
+  }
 }
 
 declare global {

@@ -10,5 +10,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   shell: {
     openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path)
+  },
+  win: {
+    setAspectRatio: (ratio: number) => ipcRenderer.invoke('win:setAspectRatio', ratio),
+    setFullScreen: (isFull: boolean) => ipcRenderer.invoke('win:setFullScreen', isFull)
+  },
+  font: {
+    getSystemFonts: () => ipcRenderer.invoke('font:getSystemFonts')
   }
 })
