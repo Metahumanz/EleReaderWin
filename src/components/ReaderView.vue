@@ -259,8 +259,14 @@ const handleWheel = (e: WheelEvent) => {
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
-  if (showMenu.value) return
   const k = e.key, c = e.code
+  // ESC: exit fullscreen or close menu
+  if (k === 'Escape') {
+    if (isImmersive.value) { toggleImmersiveMode(); return }
+    if (showMenu.value) { closeAll(); return }
+    return
+  }
+  if (showMenu.value) return
   if (k === 'ArrowRight' || k === 'd' || k === 'D' || c === 'Numpad6' || k === 'PageDown' ||
       k === 'ArrowDown' || k === 's' || k === 'S' || c === 'Numpad2') { e.preventDefault(); nextPage() }
   else if (k === 'ArrowLeft' || k === 'a' || k === 'A' || c === 'Numpad4' || k === 'PageUp' ||
