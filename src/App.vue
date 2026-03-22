@@ -70,7 +70,7 @@ onMounted(() => {
 
     <!-- Navigation -->
     <nav 
-      v-if="!isImmersive || currentView !== 'reader'"
+      v-if="currentView !== 'reader'"
       class="fixed top-0 left-0 right-0 h-14 glass-dark flex items-center px-6 z-[100] transition-transform duration-300"
     >
       <button
@@ -105,7 +105,7 @@ onMounted(() => {
     <!-- Main Content -->
     <main 
       class="transition-all duration-500"
-      :class="[!isImmersive || currentView !== 'reader' ? 'pt-14' : '']"
+      :class="[currentView !== 'reader' ? 'pt-14' : '']"
     >
       <Transition name="fade" mode="out-in">
         <BookshelfView
