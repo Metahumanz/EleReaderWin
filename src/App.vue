@@ -14,11 +14,11 @@ const isImmersive = ref(false)
 const loadUserSettings = async () => {
   try {
     const result = await window.electronAPI.db.query("SELECT value FROM settings WHERE key = 'bgImage'")
-    if (Array.isArray(result) && result.length > 0) {
+    if (Array.isArray(result) && result.length > 0 && result[0].value) {
       bgImage.value = result[0].value
+    } else {
+      bgImage.value = ''
     }
-    
-    // Check if immersive mode was saved (optional, but keep it consistent)
   } catch (e) {
     console.error('Failed to load user settings:', e)
   }
@@ -32,6 +32,8 @@ const openBook = (bookId: number) => {
 const goBack = () => {
   currentView.value = 'bookshelf'
   selectedBookId.value = null
+  isImmersive.value = false
+  window.electronAPI.win.setFullScreen(false)
 }
 
 const openSettings = () => {
@@ -43,6 +45,16 @@ const toggleImmersive = async (val: boolean) => {
   await window.electronAPI.win.setFullScreen(val)
 }
 
+const bgStyle = () => {
+  if (!bgImage.value) return {}
+  return {
+    backgroundImage: `url('${bgImage.value}')`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat'
+  }
+}
+
 onMounted(() => {
   loadUserSettings()
 })
@@ -51,10 +63,10 @@ onMounted(() => {
 <template>
   <div 
     class="min-h-screen bg-slate-950 text-white selection:bg-blue-500/30 transition-all duration-500"
-    :style="bgImage ? { backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}"
+    :style="bgStyle()"
   >
     <!-- Background Overlay for contrast -->
-    <div v-if="bgImage" class="fixed inset-0 bg-slate-950/40 pointer-events-none"></div>
+    <div v-if="bgImage" class="fixed inset-0 bg-slate-950/50 pointer-events-none"></div>
 
     <!-- Navigation -->
     <nav 
@@ -95,8 +107,6 @@ onMounted(() => {
       class="transition-all duration-500"
       :class="[!isImmersive || currentView !== 'reader' ? 'pt-14' : '']"
     >
-      <router-view v-if="false" /> <!-- Future use -->
-      
       <Transition name="fade" mode="out-in">
         <BookshelfView
           v-if="currentView === 'bookshelf'"

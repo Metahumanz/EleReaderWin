@@ -13,6 +13,7 @@ export interface ElectronAPI {
   }
   dialog: {
     openFile: () => Promise<string | null>
+    openImage: () => Promise<string | null>
   }
   shell: {
     openPath: (path: string) => Promise<void>

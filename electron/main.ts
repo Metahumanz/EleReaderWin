@@ -9,12 +9,36 @@ let mainWindow: BrowserWindow | null = null
 let db: Database | null = null
 let dbPath: string = ''
 
+// ---- Window bounds persistence ----
+const boundsFile = join(app.getPath('userData'), 'window-bounds.json')
+
+function loadBounds(): Electron.Rectangle | null {
+  try {
+    if (existsSync(boundsFile)) {
+      return JSON.parse(readFileSync(boundsFile, 'utf8'))
+    }
+  } catch {}
+  return null
+}
+
+function saveBounds(): void {
+  if (!mainWindow) return
+  try {
+    const bounds = mainWindow.getBounds()
+    writeFileSync(boundsFile, JSON.stringify(bounds))
+  } catch {}
+}
+
 function createWindow(): void {
+  const saved = loadBounds()
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: saved?.width || 1200,
+    height: saved?.height || 800,
+    x: saved?.x,
+    y: saved?.y,
+    minWidth: 600,
+    minHeight: 400,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -28,6 +52,10 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
   })
+
+  // Save bounds on resize/move
+  mainWindow.on('resize', saveBounds)
+  mainWindow.on('move', saveBounds)
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -76,7 +104,6 @@ async function initDatabase(): Promise<void> {
   const wasmBuffer = readFileSync(wasmPath)
   console.log('WASM size:', wasmBuffer.length)
   
-  // Use the underlying ArrayBuffer for initSqlJs
   const SQL = await initSqlJs({ wasmBinary: wasmBuffer.buffer })
   dbPath = join(app.getPath('userData'), 'reader.db')
 
@@ -153,11 +180,14 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  saveBounds()
   saveDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
+
+// ---- IPC handlers ----
 
 ipcMain.handle('db:query', async (_, sql: string, params?: any[]) => {
   if (!db) throw new Error('Database not initialized')
@@ -238,10 +268,19 @@ ipcMain.handle('dialog:openFile', async () => {
     ]
   })
 
-  if (result.canceled) {
-    return null
-  }
+  if (result.canceled) return null
+  return result.filePaths[0]
+})
 
+// Browse for image files
+ipcMain.handle('dialog:openImage', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'] }
+    ]
+  })
+  if (result.canceled) return null
   return result.filePaths[0]
 })
 
@@ -251,9 +290,8 @@ ipcMain.handle('shell:openPath', async (_, path: string) => {
 
 ipcMain.handle('win:setAspectRatio', async (_, ratio: number) => {
   mainWindow?.setAspectRatio(ratio)
-  // Optionally resize to fit the ratio immediately
   if (mainWindow) {
-    const [width, height] = mainWindow.getSize()
+    const [width] = mainWindow.getSize()
     mainWindow.setSize(width, Math.round(width / ratio))
   }
 })
@@ -269,7 +307,7 @@ ipcMain.handle('font:getSystemFonts', async () => {
   try {
     const cmd = '[System.Drawing.Text.InstalledFontCollection]::new().Families.Name'
     const output = execSync(`powershell -command "${cmd}"`, { encoding: 'utf8' })
-    return output.split(/\r?\n/).filter(f => f.trim())
+    return output.split(/\r?\n/).filter((f: string) => f.trim())
   } catch (e) {
     console.error('Failed to get fonts:', e)
     return []

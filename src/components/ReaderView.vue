@@ -33,7 +33,7 @@ const showMenu = ref(false)
 const showStyling = ref(false)
 const isImmersive = ref(false)
 
-// Reader Settings
+// Reader styling
 const fontSize = ref(20)
 const lineHeight = ref(1.8)
 const letterSpacing = ref(0)
@@ -47,7 +47,9 @@ const currentPage = ref(0)
 const totalPages = ref(1)
 const contentRef = ref<HTMLElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
+const flipDirection = ref<'left' | 'right' | ''>('')
 
+// ---- Data fetching ----
 const fetchBook = async () => {
   try {
     const result = await window.electronAPI.db.query(
@@ -56,7 +58,7 @@ const fetchBook = async () => {
     )
     if (Array.isArray(result) && result.length > 0) {
       book.value = result[0] as Book
-      currentChapterIndex.value = book.value.progress_index
+      currentChapterIndex.value = book.value.progress_index || 0
     }
   } catch (error) {
     console.error('Failed to fetch book:', error)
@@ -79,7 +81,7 @@ const loadSettings = async () => {
   try {
     const result = await window.electronAPI.db.query('SELECT * FROM settings')
     if (Array.isArray(result)) {
-      result.forEach(s => {
+      result.forEach((s: any) => {
         if (s.key === 'reader_fontSize') fontSize.value = parseInt(s.value) || 20
         if (s.key === 'reader_lineHeight') lineHeight.value = parseFloat(s.value) || 1.8
         if (s.key === 'reader_letterSpacing') letterSpacing.value = parseFloat(s.value) || 0
@@ -88,14 +90,22 @@ const loadSettings = async () => {
         if (s.key === 'reader_fontFamily') fontFamily.value = s.value || 'system-ui'
       })
     }
-    systemFonts.value = await window.electronAPI.font.getSystemFonts()
+    try {
+      systemFonts.value = await window.electronAPI.font.getSystemFonts()
+    } catch (_) {
+      systemFonts.value = []
+    }
   } catch (e) {
     console.error('Failed to load reader settings:', e)
   }
 }
 
+// ---- Settings persistence ----
 const saveSetting = async (key: string, value: any) => {
-  await window.electronAPI.db.query('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, String(value)])
+  await window.electronAPI.db.query(
+    'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+    [key, String(value)]
+  )
 }
 
 const updateStyling = () => {
@@ -105,21 +115,39 @@ const updateStyling = () => {
   saveSetting('reader_marginX', marginX.value)
   saveSetting('reader_marginY', marginY.value)
   saveSetting('reader_fontFamily', fontFamily.value)
-  calculatePages()
+  // Recalculate after DOM reflow
+  recalc()
+}
+
+// ---- Pagination ----
+const recalc = () => {
+  nextTick(() => {
+    setTimeout(() => {
+      calculatePages()
+    }, 50)
+  })
 }
 
 const calculatePages = () => {
   if (!contentRef.value || !containerRef.value) return
-  nextTick(() => {
-    const scrollWidth = contentRef.value!.scrollWidth
-    const clientWidth = containerRef.value!.clientWidth
-    totalPages.value = Math.max(1, Math.ceil(scrollWidth / clientWidth))
-    if (currentPage.value >= totalPages.value) {
-      currentPage.value = totalPages.value - 1
-    }
-  })
+  const containerW = containerRef.value.clientWidth
+  if (containerW <= 0) return
+  const scrollW = contentRef.value.scrollWidth
+  const pages = Math.max(1, Math.ceil(scrollW / containerW))
+  totalPages.value = pages
+  if (currentPage.value >= pages) {
+    currentPage.value = pages - 1
+  }
 }
 
+const pageOffset = computed(() => {
+  if (!containerRef.value) return '0px'
+  // Each "page" is the container width
+  const w = containerRef.value.clientWidth
+  return `-${currentPage.value * w}px`
+})
+
+// ---- Progress & Navigation ----
 const saveProgress = async () => {
   if (!book.value) return
   try {
@@ -132,47 +160,68 @@ const saveProgress = async () => {
   }
 }
 
-const goToChapter = (index: number) => {
+const goToChapter = (index: number, keepMenu = false) => {
   if (index >= 0 && index < chapters.value.length) {
     currentChapterIndex.value = index
     currentPage.value = 0
-    showMenu.value = false
+    if (!keepMenu) showMenu.value = false
     saveProgress()
-    calculatePages()
+    recalc()
   }
 }
 
-const nextChapter = () => goToChapter(currentChapterIndex.value + 1)
-const prevChapter = () => goToChapter(currentChapterIndex.value - 1)
+const nextChapter = () => {
+  if (currentChapterIndex.value < chapters.value.length - 1) {
+    goToChapter(currentChapterIndex.value + 1, true)
+  }
+}
+const prevChapter = () => {
+  if (currentChapterIndex.value > 0) {
+    goToChapter(currentChapterIndex.value - 1, true)
+  }
+}
 
 const nextPage = () => {
   if (currentPage.value < totalPages.value - 1) {
+    flipDirection.value = 'left'
     currentPage.value++
   } else if (currentChapterIndex.value < chapters.value.length - 1) {
-    nextChapter()
+    flipDirection.value = 'left'
+    currentChapterIndex.value++
+    currentPage.value = 0
+    saveProgress()
+    recalc()
   }
 }
 
 const prevPage = () => {
   if (currentPage.value > 0) {
+    flipDirection.value = 'right'
     currentPage.value--
   } else if (currentChapterIndex.value > 0) {
-    prevChapter()
+    flipDirection.value = 'right'
+    currentChapterIndex.value--
+    saveProgress()
     nextTick(() => {
-      currentPage.value = totalPages.value - 1
+      setTimeout(() => {
+        calculatePages()
+        currentPage.value = Math.max(0, totalPages.value - 1)
+      }, 80)
     })
   }
 }
 
+// ---- Interaction ----
 const handleInteraction = (e: MouseEvent) => {
+  // Don't handle clicks on menu/styling panel
+  const target = e.target as HTMLElement
+  if (target.closest('.menu-panel') || target.closest('.styling-panel')) return
+
   const x = e.clientX
   const width = window.innerWidth
-  const leftZone = width * 0.3
-  const rightZone = width * 0.7
-
-  if (x < leftZone) {
+  if (x < width * 0.3) {
     prevPage()
-  } else if (x > rightZone) {
+  } else if (x > width * 0.7) {
     nextPage()
   } else {
     showMenu.value = !showMenu.value
@@ -181,6 +230,7 @@ const handleInteraction = (e: MouseEvent) => {
 }
 
 const handleWheel = (e: WheelEvent) => {
+  if (showStyling.value) return // Don't page-flip while adjusting styles
   if (Math.abs(e.deltaY) < 10) return
   if (e.deltaY > 0) nextPage()
   else prevPage()
@@ -191,240 +241,204 @@ const toggleImmersiveMode = () => {
   emit('toggle-immersive', isImmersive.value)
 }
 
+// ---- Progress ----
 const progressPercent = computed(() => {
   if (chapters.value.length === 0) return 0
   const chapterWeight = 100 / chapters.value.length
-  const currentChapterProgress = (currentPage.value + 1) / totalPages.value * chapterWeight
-  return Math.min(100, Math.round(currentChapterIndex.value * chapterWeight + currentChapterProgress))
+  const inChapter = totalPages.value > 0
+    ? ((currentPage.value + 1) / totalPages.value) * chapterWeight
+    : chapterWeight
+  return Math.min(100, Math.round(currentChapterIndex.value * chapterWeight + inChapter))
 })
 
-const handleSliderChange = (e: Event) => {
+const handleProgressSlider = (e: Event) => {
   const target = e.target as HTMLInputElement
   const percent = parseInt(target.value)
-  const index = Math.floor((percent / 100) * chapters.value.length)
-  goToChapter(Math.min(index, chapters.value.length - 1))
+  const idx = Math.floor((percent / 100) * chapters.value.length)
+  goToChapter(Math.min(idx, chapters.value.length - 1), true)
 }
 
-watch([currentChapterIndex, fontSize, lineHeight, fontFamily, marginX, marginY], () => {
-  calculatePages()
+// ---- Watchers ----
+watch(currentChapterIndex, () => {
+  recalc()
 })
 
+watch([fontSize, lineHeight, letterSpacing, marginX, marginY, fontFamily], () => {
+  recalc()
+})
+
+// ---- Lifecycle ----
 onMounted(async () => {
   await loadSettings()
   await fetchBook()
   await fetchChapters()
   loading.value = false
-  setTimeout(calculatePages, 200)
-  window.addEventListener('resize', calculatePages)
+  setTimeout(() => {
+    calculatePages()
+  }, 300)
+  window.addEventListener('resize', recalc)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', calculatePages)
+  window.removeEventListener('resize', recalc)
 })
 </script>
 
 <template>
-  <div class="fixed inset-0 overflow-hidden select-none flex flex-col transition-all duration-500" @wheel="handleWheel">
-    <div v-if="loading" class="flex-1 flex items-center justify-center glass-dark">
-      <div class="flex flex-col items-center gap-4">
-        <div class="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-        <p class="text-slate-400 font-medium tracking-widest">正在载入文墨...</p>
-      </div>
+  <div class="reader-root" @wheel.prevent="handleWheel">
+    <!-- Loading -->
+    <div v-if="loading" class="loading-screen">
+      <div class="spinner"></div>
+      <p>正在载入...</p>
     </div>
 
     <template v-else>
-      <!-- Content Layer -->
-      <div 
-        class="flex-1 relative cursor-pointer active:scale-[0.998] transition-all duration-300"
-        @click="handleInteraction"
-      >
-        <div 
+      <!-- Reading Area (click zones) -->
+      <div class="reading-area" @click="handleInteraction">
+        <div
           ref="containerRef"
-          class="h-full overflow-hidden"
+          class="page-container"
           :style="{
-            padding: `${marginY}px ${marginX}px`
+            padding: `${marginY}px ${marginX}px`,
           }"
         >
-          <div 
+          <div
             ref="contentRef"
-            class="h-full transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1)"
-            :style="{ 
-              transform: `translateX(calc(-1 * ${currentPage} * (100% + ${marginX * 2}px)))`,
-              columnWidth: 'calc(100vw - ' + (marginX * 2) + 'px)',
-              columnGap: (marginX * 2) + 'px',
+            class="page-content"
+            :style="{
+              transform: `translateX(${pageOffset})`,
+              columnWidth: `calc(100vw - ${marginX * 2}px)`,
+              columnGap: `${marginX * 2}px`,
               columnFill: 'auto',
               fontFamily: fontFamily,
               fontSize: fontSize + 'px',
-              lineHeight: lineHeight,
+              lineHeight: String(lineHeight),
               letterSpacing: letterSpacing + 'em',
             }"
           >
-            <div class="prose prose-invert max-w-none prose-p:mb-[0.8em]">
-              <h2 class="text-3xl font-bold mb-8 opacity-80" :style="{ fontSize: (fontSize * 1.6) + 'px' }">
-                {{ chapters[currentChapterIndex]?.title }}
-              </h2>
-              <div v-html="chapters[currentChapterIndex]?.body" class="reader-content"></div>
-            </div>
+            <h2 class="chapter-title" :style="{ fontSize: (fontSize * 1.4) + 'px' }">
+              {{ chapters[currentChapterIndex]?.title }}
+            </h2>
+            <div v-html="chapters[currentChapterIndex]?.body" class="chapter-body"></div>
           </div>
         </div>
-
-        <!-- HUD: Bottom overlays when menu is hidden -->
-        <Transition name="fade">
-          <div v-if="!showMenu" class="absolute bottom-6 left-12 right-12 flex justify-between items-end pointer-events-none opacity-60 transition-opacity">
-            <div class="text-[11px] font-bold tracking-tight bg-slate-900/40 backdrop-blur-sm px-3 py-1 rounded-full border border-white/5">
-              {{ currentPage === 0 ? book?.title : chapters[currentChapterIndex]?.title }}
-            </div>
-            <div class="text-[11px] font-mono font-bold bg-slate-900/40 backdrop-blur-sm px-3 py-1 rounded-full border border-white/5">
-              {{ progressPercent }}%
-            </div>
-          </div>
-        </Transition>
       </div>
 
-      <!-- Menu Overlay -->
-      <Transition name="fade">
-        <div v-if="showMenu" class="absolute inset-x-0 top-0 h-16 glass-dark border-b border-white/5 flex items-center px-6 z-50">
-          <button @click="showMenu = false" class="p-2 hover:bg-white/10 rounded-xl transition-all">
-            <span class="text-xl">✕</span>
-          </button>
-          <div class="ml-4 font-bold truncate max-w-[40%] text-slate-200">
-            {{ book?.title }}
-            <span class="ml-2 text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md border border-blue-500/20">v0.1.2</span>
+      <!-- HUD (when menu closed) -->
+      <div v-if="!showMenu" class="hud">
+        <span class="hud-left">
+          {{ currentPage === 0 ? book?.title : chapters[currentChapterIndex]?.title }}
+        </span>
+        <span class="hud-right">{{ progressPercent }}%</span>
+      </div>
+
+      <!-- Immersive toggle (always visible bottom-right when menu closed) -->
+      <button v-if="!showMenu" class="immersive-btn" @click.stop="toggleImmersiveMode">
+        {{ isImmersive ? '⊠ 退出全屏' : '⊞ 沉浸阅读' }}
+      </button>
+
+      <!-- ===== MENU OVERLAY ===== -->
+      <Transition name="slide-fade">
+        <div v-if="showMenu" class="menu-panel">
+          <!-- Top bar -->
+          <div class="menu-top">
+            <button @click="showMenu = false; showStyling = false" class="menu-close">✕</button>
+            <div class="menu-title">{{ book?.title }}</div>
+            <div class="menu-actions">
+              <button @click="toggleImmersiveMode" class="menu-btn">
+                {{ isImmersive ? '退出全屏' : '全屏模式' }}
+              </button>
+              <button
+                @click="showStyling = !showStyling"
+                class="menu-btn"
+                :class="{ active: showStyling }"
+              >
+                Aa 排版
+              </button>
+            </div>
           </div>
-          
-          <div class="ml-auto flex items-center gap-3">
-            <button 
-              @click="toggleImmersiveMode" 
-              class="px-4 py-1.5 glass rounded-xl text-xs font-bold hover:bg-blue-500/20 transition-all border-none"
-            >
-              {{ isImmersive ? '退出全屏' : '全屏模式' }}
-            </button>
-            <button 
-              @click="showStyling = !showStyling" 
-              class="p-2.5 hover:bg-white/10 rounded-xl transition-all"
-              :class="{ 'bg-blue-500 text-white shadow-lg shadow-blue-500/30': showStyling }"
-            >
-              <span class="font-bold">Aa</span>
-            </button>
+
+          <!-- Bottom bar: progress -->
+          <div class="menu-bottom">
+            <button @click="prevChapter" :disabled="currentChapterIndex === 0" class="ch-btn">⏮ 上一章</button>
+
+            <div class="progress-wrap">
+              <input
+                type="range" min="0" max="100"
+                :value="progressPercent"
+                @input="handleProgressSlider"
+                class="progress-slider"
+              >
+              <div class="progress-label">{{ progressPercent }}%</div>
+            </div>
+
+            <button @click="nextChapter" :disabled="currentChapterIndex >= chapters.length - 1" class="ch-btn">下一章 ⏭</button>
+          </div>
+
+          <div class="menu-info">
+            <span>第 {{ currentChapterIndex + 1 }} / {{ chapters.length }} 章</span>
+            <span>「{{ chapters[currentChapterIndex]?.title }}」</span>
+            <span>第 {{ currentPage + 1 }} / {{ totalPages }} 页</span>
           </div>
         </div>
       </Transition>
 
-      <Transition name="fade">
-        <div v-if="showMenu" class="absolute inset-x-0 bottom-0 py-8 px-12 glass-dark border-t border-white/5 z-50">
-          <div class="max-w-4xl mx-auto space-y-8">
-            <!-- Progress Control -->
-            <div class="flex items-center gap-8">
-              <button 
-                @click="prevChapter" 
-                :disabled="currentChapterIndex === 0"
-                class="w-12 h-12 glass rounded-2xl flex items-center justify-center disabled:opacity-20 hover:bg-blue-500/20 transition-all active:scale-90"
-              >
-                <span class="text-xl">⏮</span>
-              </button>
-              
-              <div class="flex-1 relative group py-2">
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  :value="progressPercent"
-                  @input="handleSliderChange"
-                  class="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-500"
-                >
-                <div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-mono opacity-0 group-hover:opacity-100 transition-opacity bg-blue-500 px-2 py-0.5 rounded text-white font-bold shadow-lg">
-                  {{ progressPercent }}%
-                </div>
-              </div>
-
-              <button 
-                @click="nextChapter" 
-                :disabled="currentChapterIndex === chapters.length - 1"
-                class="w-12 h-12 glass rounded-2xl flex items-center justify-center disabled:opacity-20 hover:bg-blue-500/20 transition-all active:scale-90"
-              >
-                <span class="text-xl">⏭</span>
-              </button>
-            </div>
-
-            <div class="flex justify-between items-center text-xs text-slate-400 font-bold uppercase tracking-widest">
-              <span class="bg-white/5 px-2 py-1 rounded">第 {{ currentChapterIndex + 1 }} 章</span>
-              <span class="text-blue-400">「 {{ chapters[currentChapterIndex]?.title }} 」</span>
-              <span class="bg-white/5 px-2 py-1 rounded">{{ currentPage + 1 }} / {{ totalPages }} 页</span>
-            </div>
+      <!-- ===== STYLING PANEL ===== -->
+      <Transition name="slide-fade">
+        <div v-if="showStyling && showMenu" class="styling-panel" @click.stop>
+          <div class="sp-header">
+            <span class="sp-title">排版设置</span>
+            <button @click="showStyling = false" class="sp-close">✕</button>
           </div>
-        </div>
-      </Transition>
 
-      <!-- Advanced Styling Panel -->
-      <Transition name="fade">
-        <div v-if="showStyling && showMenu" class="absolute right-8 bottom-36 w-[340px] glass-dark rounded-3xl p-8 border border-white/10 z-[60] shadow-2xl space-y-8">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xs font-black opacity-40 uppercase tracking-[0.2em]">排版实验室</h3>
-            <button @click="showStyling = false" class="text-slate-500 hover:text-white transition-colors">✕</button>
+          <!-- Font family -->
+          <div class="sp-row">
+            <label>字体</label>
+            <select v-model="fontFamily" @change="updateStyling" class="sp-select">
+              <option value="system-ui">系统默认</option>
+              <option value="serif">宋体 Serif</option>
+              <option value="'Microsoft YaHei'">微软雅黑</option>
+              <option v-for="f in systemFonts" :key="f" :value="`'${f}'`">{{ f }}</option>
+            </select>
           </div>
-          
-          <div class="space-y-7">
-            <!-- Font Selection -->
-            <div class="space-y-3">
-              <label class="text-[10px] opacity-40 block font-black uppercase tracking-widest">字体艺术</label>
-              <select 
-                v-model="fontFamily" 
-                @change="updateStyling"
-                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all hover:bg-white/10"
-              >
-                <option value="system-ui">系统默认 (Sans)</option>
-                <option value="serif">宋体 / Serif</option>
-                <option v-for="f in systemFonts" :key="f" :value="f">{{ f }}</option>
-              </select>
-            </div>
 
-            <!-- Stylers: Slider + Input Pair -->
-            <div v-for="item in [
-              { label: '文字大小', key: 'fontSize', min: 12, max: 64, step: 1, unit: 'px' },
-              { label: '行间距', key: 'lineHeight', min: 1.0, max: 4.0, step: 0.1, unit: '' },
-              { label: '字间距', key: 'letterSpacing', min: -0.1, max: 1.0, step: 0.01, unit: 'em' }
-            ]" :key="item.key" class="space-y-3">
-              <div class="flex justify-between items-center">
-                <label class="text-[10px] opacity-40 font-black uppercase tracking-widest">{{ item.label }}</label>
-                <div class="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    v-model="($data as any)[item.key]" 
-                    @change="updateStyling"
-                    class="w-14 bg-white/5 border border-white/10 rounded-lg py-1 px-2 text-center text-xs font-mono outline-none focus:border-blue-500"
-                  >
-                  <span class="text-[10px] opacity-30 font-mono">{{ item.unit }}</span>
-                </div>
-              </div>
-              <input 
-                type="range" :min="item.min" :max="item.max" :step="item.step" 
-                v-model.number="($data as any)[item.key]" 
-                @input="updateStyling"
-                class="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
-              >
-            </div>
+          <!-- Font size -->
+          <div class="sp-row">
+            <label>字号</label>
+            <input type="range" min="12" max="64" step="1" v-model.number="fontSize" @input="updateStyling" class="sp-slider">
+            <input type="number" v-model.number="fontSize" @change="updateStyling" class="sp-num">
+            <span class="sp-unit">px</span>
+          </div>
 
-            <!-- Margins: Slider + Input -->
-            <div v-for="item in [
-              { label: '左右边距', key: 'marginX', min: 0, max: 200, step: 1 },
-              { label: '上下边距', key: 'marginY', min: 0, max: 150, step: 1 }
-            ]" :key="item.key" class="space-y-3">
-              <div class="flex justify-between items-center">
-                <label class="text-[10px] opacity-40 font-black uppercase tracking-widest">{{ item.label }}</label>
-                <input 
-                  type="number" 
-                  v-model="($data as any)[item.key]" 
-                  @change="updateStyling"
-                  class="w-14 bg-white/5 border border-white/10 rounded-lg py-1 px-2 text-center text-xs font-mono outline-none"
-                >
-              </div>
-              <input 
-                type="range" :min="item.min" :max="item.max" :step="item.step" 
-                v-model.number="($data as any)[item.key]" 
-                @input="updateStyling"
-                class="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
-              >
-            </div>
+          <!-- Line height -->
+          <div class="sp-row">
+            <label>行间距</label>
+            <input type="range" min="1" max="4" step="0.1" v-model.number="lineHeight" @input="updateStyling" class="sp-slider">
+            <input type="number" v-model.number="lineHeight" step="0.1" @change="updateStyling" class="sp-num">
+          </div>
+
+          <!-- Letter spacing -->
+          <div class="sp-row">
+            <label>字间距</label>
+            <input type="range" min="-0.1" max="1" step="0.01" v-model.number="letterSpacing" @input="updateStyling" class="sp-slider">
+            <input type="number" v-model.number="letterSpacing" step="0.01" @change="updateStyling" class="sp-num">
+            <span class="sp-unit">em</span>
+          </div>
+
+          <!-- Margin X -->
+          <div class="sp-row">
+            <label>左右边距</label>
+            <input type="range" min="0" max="200" step="1" v-model.number="marginX" @input="updateStyling" class="sp-slider">
+            <input type="number" v-model.number="marginX" @change="updateStyling" class="sp-num">
+            <span class="sp-unit">px</span>
+          </div>
+
+          <!-- Margin Y -->
+          <div class="sp-row">
+            <label>上下边距</label>
+            <input type="range" min="0" max="150" step="1" v-model.number="marginY" @input="updateStyling" class="sp-slider">
+            <input type="number" v-model.number="marginY" @change="updateStyling" class="sp-num">
+            <span class="sp-unit">px</span>
           </div>
         </div>
       </Transition>
@@ -433,31 +447,359 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.reader-content {
+/* ---- Root ---- */
+.reader-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  color: white;
+  background: transparent;
+}
+
+/* ---- Loading ---- */
+.loading-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: rgba(255,255,255,0.5);
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 2px solid rgba(59,130,246,0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Reading area ---- */
+.reading-area {
+  flex: 1;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.page-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.page-content {
+  height: 100%;
+  transition: transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  column-fill: auto;
+}
+
+.chapter-title {
+  font-weight: 700;
+  margin-bottom: 1.5em;
+  opacity: 0.85;
+}
+
+.chapter-body {
   height: 100%;
 }
 
-/* Range input styling */
-input[type="range"]::-webkit-slider-thumb {
+.chapter-body :deep(p) {
+  text-indent: 2em;
+  margin-bottom: 0.8em;
+}
+
+/* ---- HUD ---- */
+.hud {
+  position: absolute;
+  bottom: 16px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
+.hud-left, .hud-right {
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(8px);
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.06);
+  opacity: 0.7;
+}
+.hud-right {
+  font-family: 'Consolas', monospace;
+}
+
+/* ---- Immersive button ---- */
+.immersive-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.7);
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.immersive-btn:hover {
+  background: rgba(59,130,246,0.2);
+  color: white;
+}
+
+/* ---- Menu Panel ---- */
+.menu-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.menu-panel > * {
+  pointer-events: auto;
+}
+
+.menu-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  height: 56px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.menu-close {
+  background: none; border: none; color: white; font-size: 18px; cursor: pointer;
+  padding: 8px; border-radius: 8px;
+}
+.menu-close:hover { background: rgba(255,255,255,0.1); }
+.menu-title {
+  font-weight: 700;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+  opacity: 0.9;
+}
+.menu-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.menu-btn {
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.menu-btn:hover { background: rgba(59,130,246,0.2); }
+.menu-btn.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+}
+
+.menu-bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.ch-btn {
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.ch-btn:hover:not(:disabled) { background: rgba(59,130,246,0.2); }
+.ch-btn:disabled { opacity: 0.25; cursor: default; }
+
+.progress-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.progress-slider {
+  width: 100%;
+  height: 6px;
   -webkit-appearance: none;
-  @apply w-3.5 h-3.5 bg-white rounded-full shadow-lg border-2 border-blue-500 cursor-pointer hover:scale-125 transition-transform;
+  appearance: none;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+.progress-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  background: white;
+  border: 2px solid #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.progress-label {
+  font-size: 10px;
+  font-family: monospace;
+  color: rgba(255,255,255,0.5);
 }
 
-select option {
-  @apply bg-slate-900 text-white p-4;
+.menu-info {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 24px 12px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
 }
 
-.fade-element {
-  animation: fadeIn 0.4s ease-out;
+/* ---- Styling Panel ---- */
+.styling-panel {
+  position: absolute;
+  right: 20px;
+  bottom: 140px;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 20px;
+  z-index: 60;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+.sp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.sp-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  opacity: 0.5;
+}
+.sp-close {
+  background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 16px;
+}
+.sp-close:hover { color: white; }
+
+.sp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.sp-row label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.6;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+.sp-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  outline: none;
+}
+.sp-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  background: white;
+  border: 2px solid #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.sp-num {
+  width: 52px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 4px 6px;
+  text-align: center;
+  font-size: 12px;
+  font-family: monospace;
+  color: white;
+  outline: none;
+}
+.sp-num:focus { border-color: #3b82f6; }
+.sp-unit {
+  font-size: 10px;
+  opacity: 0.3;
+  font-family: monospace;
+  min-width: 20px;
+}
+.sp-select {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: white;
+  outline: none;
+  cursor: pointer;
+}
+.sp-select option {
+  background: #0f172a;
+  color: white;
 }
 
-/* Custom Scrollbar (hidden but logic remains) */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+/* ---- Transitions ---- */
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+.slide-fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
 }
 </style>

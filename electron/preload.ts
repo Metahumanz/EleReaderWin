@@ -6,7 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     importBook: (filePath: string) => ipcRenderer.invoke('db:importBook', filePath)
   },
   dialog: {
-    openFile: () => ipcRenderer.invoke('dialog:openFile')
+    openFile: () => ipcRenderer.invoke('dialog:openFile'),
+    openImage: () => ipcRenderer.invoke('dialog:openImage')
   },
   shell: {
     openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path)
