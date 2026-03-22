@@ -161,9 +161,9 @@ const applyThemeConfig = (t: Partial<CustomTheme>) => {
 }
 
 const applyTheme = (type: string) => {
-  if (type === 'dark') { applyThemeConfig({ bgImage: '', coverColor: '#0f172a', fontColor: '#e2e8f0' }) }
-  else if (type === 'paper') { applyThemeConfig({ bgImage: '', coverColor: '#f4ecd8', fontColor: '#5c4b37' }) }
-  else if (type === 'green') { applyThemeConfig({ bgImage: '', coverColor: '#cce8cf', fontColor: '#2a4b2a' }) }
+  if (type === 'dark') { applyThemeConfig({ bgImage: 'https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?q=80&w=2620&auto=format&fit=crop', coverColor: '#0f172a', fontColor: '#e2e8f0' }) }
+  else if (type === 'paper') { applyThemeConfig({ bgImage: 'https://images.unsplash.com/photo-1603484477859-abe6a73f9366?auto=format&fit=crop&q=80&w=2600', coverColor: '#f4ecd8', fontColor: '#5c4b37' }) }
+  else if (type === 'green') { applyThemeConfig({ bgImage: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=2000', coverColor: '#cce8cf', fontColor: '#2a4b2a' }) }
 }
 
 const saveTheme = async () => {
@@ -324,21 +324,27 @@ const slideToNextChapter = () => {
   flipLock = true
   suppressAnim.value = true
   
-  const finishFlip = () => {
-    currentChapterIndex.value++
-    currentPage.value = 0
-    saveProgress()
-    nextTick(() => { requestAnimationFrame(() => { calculatePages(); requestAnimationFrame(() => { suppressAnim.value = false; coverDir.value = ''; carouselSliding.value = false; flipLock = false }) }) })
-  }
-
   if (flipMode.value === 'cover') {
     coverDir.value = 'cover-left'
-    requestAnimationFrame(() => { currentChapterIndex.value++; currentPage.value = 0 })
-    setTimeout(() => { finishFlip() }, 380)
+    requestAnimationFrame(() => {
+      currentChapterIndex.value++
+      currentPage.value = 0
+      saveProgress()
+    })
+    setTimeout(() => {
+      nextTick(() => { calculatePages(); suppressAnim.value = false; coverDir.value = ''; flipLock = false })
+    }, 380)
   } else {
     carouselSliding.value = true
     carouselPos.value = 1
-    setTimeout(() => { carouselPos.value = 0; finishFlip() }, 380)
+    setTimeout(() => {
+      carouselSliding.value = false
+      currentChapterIndex.value++
+      currentPage.value = 0
+      carouselPos.value = 0
+      saveProgress()
+      nextTick(() => { requestAnimationFrame(() => { calculatePages(); requestAnimationFrame(() => { suppressAnim.value = false; flipLock = false }) }) })
+    }, 380)
   }
 }
 
@@ -347,24 +353,29 @@ const slideToPrevChapter = () => {
   flipLock = true
   suppressAnim.value = true
 
-  const finishFlip = () => {
-    nextTick(() => {
-      calculatePages()
-      const step = (pageMode.value === 'double' && doublePageStep.value === 2) ? 2 : 1
-      currentPage.value = Math.max(0, Math.floor((totalPages.value - 1) / step) * step)
-      saveProgress()
-      requestAnimationFrame(() => { suppressAnim.value = false; coverDir.value = ''; carouselSliding.value = false; flipLock = false })
-    })
+  const setLastPage = () => {
+    calculatePages()
+    const step = (pageMode.value === 'double' && doublePageStep.value === 2) ? 2 : 1
+    currentPage.value = Math.max(0, Math.floor((totalPages.value - 1) / step) * step)
+    saveProgress()
   }
 
   if (flipMode.value === 'cover') {
     coverDir.value = 'cover-right'
-    requestAnimationFrame(() => { currentChapterIndex.value-- })
-    setTimeout(() => { finishFlip() }, 380)
+    requestAnimationFrame(() => {
+      currentChapterIndex.value--
+      nextTick(setLastPage)
+    })
+    setTimeout(() => { suppressAnim.value = false; coverDir.value = ''; flipLock = false }, 380)
   } else {
     carouselSliding.value = true
     carouselPos.value = -1
-    setTimeout(() => { carouselPos.value = 0; currentChapterIndex.value--; finishFlip() }, 380)
+    setTimeout(() => {
+      carouselSliding.value = false
+      currentChapterIndex.value--
+      carouselPos.value = 0
+      nextTick(() => { requestAnimationFrame(() => { setLastPage(); requestAnimationFrame(() => { suppressAnim.value = false; flipLock = false }) }) })
+    }, 380)
   }
 }
 
@@ -600,12 +611,13 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="m-bot" @click.stop>
-            <button @click="openPanel('toc')" class="m-btn m-toc" :class="{active:showToc}">☰ 目录</button>
             <button @click="goToChapter(currentChapterIndex-1,true)" :disabled="currentChapterIndex===0" class="m-ch">⏮ 上一章</button>
             <div class="m-prog"><input type="range" min="0" max="100" :value="progressPercent" @input="handleProgressSlider" class="m-slider"></div>
             <button @click="goToChapter(currentChapterIndex+1,true)" :disabled="currentChapterIndex>=chapters.length-1" class="m-ch">下一章 ⏭</button>
           </div>
-          <div class="m-info" @click.stop>
+          <div class="m-info" style="pointer-events: auto;" @click.stop>
+            <button @click="openPanel('toc')" class="m-btn" :class="{active:showToc}">☰ 目录</button>
+            <div style="flex: 1;"></div>
             <span>第 {{ currentChapterIndex+1 }}/{{ chapters.length }} 章</span>
             <span>「{{ currentChapterData?.title }}」</span>
             <span>第 {{ currentPage+1 }}/{{ totalPages }} 页</span>
@@ -925,7 +937,6 @@ onUnmounted(() => {
 .theme-n:hover { background:rgba(255,255,255,0.1); }
 .theme-d { padding:4px 6px; font-size:10px; color:rgba(239,68,68,0.7); background:none; border:none; border-left:1px solid rgba(255,255,255,0.1); cursor:pointer; }
 .theme-d:hover { background:rgba(239,68,68,0.2); color:#ef4444; }
-.m-toc { position: absolute; left: 24px; }
 
 /* Transitions */
 .fade-enter-active,.fade-leave-active { transition:opacity .25s ease; }
