@@ -27,6 +27,7 @@ export interface ElectronAPI {
   }
   updater: {
     check: () => Promise<boolean>
+    download: () => Promise<boolean>
     install: () => Promise<void>
     onStatus: (cb: (data: { status: string; version?: string; percent?: number; message?: string }) => void) => void
   }

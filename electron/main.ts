@@ -23,7 +23,7 @@ function saveBounds(): void {
 
 // ---- Auto updater setup ----
 function setupAutoUpdater(): void {
-  autoUpdater.autoDownload = true
+  autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('checking-for-update', () => {
     mainWindow?.webContents.send('updater:status', { status: 'checking' })
@@ -140,6 +140,17 @@ app.whenReady().then(async () => {
     dialog.showErrorBox('数据库初始化失败', String(error))
   }
   setupAutoUpdater()
+
+  // Clean up old updater files
+  try {
+    const { rmSync } = require('fs')
+    const updaterCacheDir = join(app.getPath('userData'), '../ele-win-reader-updater')
+    if (existsSync(updaterCacheDir)) {
+      rmSync(updaterCacheDir, { recursive: true, force: true })
+      console.log('Cleaned up old updater cache:', updaterCacheDir)
+    }
+  } catch (e) { console.error('Failed to clean updater cache:', e) }
+
   // Check for updates on startup (silent)
   if (!is.dev) {
     setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 3000)
@@ -224,6 +235,10 @@ ipcMain.handle('font:getSystemFonts', async () => {
 
 ipcMain.handle('updater:check', async () => {
   try { await autoUpdater.checkForUpdates(); return true } catch (e) { return false }
+})
+
+ipcMain.handle('updater:download', async () => {
+  try { await autoUpdater.downloadUpdate(); return true } catch (e) { return false }
 })
 
 ipcMain.handle('updater:install', async () => {

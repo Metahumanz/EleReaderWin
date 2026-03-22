@@ -15,6 +15,7 @@ const bgPreview = ref('')
 const appVersion = ref('')
 const updateStatus = ref('')
 const updateDetail = ref('')
+const updateAvailable = ref(false)
 const updateReady = ref(false)
 
 // Replacement rules
@@ -62,8 +63,19 @@ const clearBgImage = async () => {
 const checkForUpdate = async () => {
   updateStatus.value = '正在检查...'
   updateDetail.value = ''
+  updateAvailable.value = false
   updateReady.value = false
   await window.electronAPI.updater.check()
+}
+
+const downloadUpdate = async () => {
+  updateStatus.value = '准备下载...'
+  updateAvailable.value = false
+  await window.electronAPI.updater.download()
+}
+
+const openReleases = () => {
+  window.open('https://github.com/Metahumanz/EleReaderWin/releases', '_blank')
 }
 
 const installNow = () => {
@@ -118,11 +130,11 @@ onMounted(async () => {
   try { appVersion.value = await window.electronAPI.app.getVersion() } catch (_) { appVersion.value = '?.?.?' }
   window.electronAPI.updater.onStatus((data) => {
     switch (data.status) {
-      case 'checking': updateStatus.value = '🔍 正在检查更新...'; break
-      case 'available': updateStatus.value = `🎉 发现新版本 v${data.version}`; updateDetail.value = '正在下载...'; break
+      case 'checking': updateStatus.value = '🔍 正在检查...'; break
+      case 'available': updateStatus.value = `🎉 发现新版本 v${data.version}`; updateDetail.value = ''; updateAvailable.value = true; break
       case 'up-to-date': updateStatus.value = '✅ 已是最新版本'; break
       case 'downloading': updateStatus.value = `⏬ 下载中 ${data.percent}%`; break
-      case 'downloaded': updateStatus.value = '✅ 下载完成'; updateDetail.value = '可立即安装或等下次启动时自动安装'; updateReady.value = true; break
+      case 'downloaded': updateStatus.value = '✅ 下载完成'; updateDetail.value = '可立即安装或等下次启动时自动安装'; updateReady.value = true; updateAvailable.value = false; break
       case 'error': updateStatus.value = '❌ 更新失败'; updateDetail.value = data.message || ''; break
     }
   })
@@ -228,9 +240,13 @@ onMounted(async () => {
     <!-- Update -->
     <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
       <div class="flex items-center gap-3 mb-2"><span class="text-xl">🔄</span><h3 class="text-lg font-bold">软件更新</h3></div>
-      <p class="text-sm text-slate-400">应用启动时自动检查更新。下载完成后可选择立即安装或下次启动时安装。</p>
+      <p class="text-sm text-slate-400">检查更新。下载并安装后，旧版本安装包会在下次启动时自动清理。</p>
       <div class="flex items-center gap-4 flex-wrap">
         <button @click="checkForUpdate" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-blue-600/20">检查更新</button>
+        <template v-if="updateAvailable">
+          <button @click="downloadUpdate" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-indigo-600/20">⏬ 后台下载</button>
+          <button @click="openReleases" class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all active:scale-95">🌐 浏览器打开</button>
+        </template>
         <button v-if="updateReady" @click="installNow" class="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-green-600/20">⬇ 立即安装</button>
         <div v-if="updateStatus">
           <p class="text-sm font-medium">{{ updateStatus }}</p>

@@ -42,6 +42,8 @@ const flipMode = ref<'slide' | 'cover'>('slide')
 // Pagination
 const currentPage = ref(0)
 const totalPages = ref(1)
+const pageMode = ref<'single' | 'double'>('single')
+const doublePageStep = ref<1 | 2>(2)
 const contentRef = ref<HTMLElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
 
@@ -88,6 +90,15 @@ const fetchChapters = async () => {
     chapters.value = r as Chapter[]
   } catch (e) { console.error(e) }
 }
+// Themes & Settings
+interface CustomTheme {
+  id: number; name: string; bgImage: string; coverColor: string; fontColor: string; 
+  fontFamily: string; fontSize: number; lineHeight: number; letterSpacing: number; 
+  fontWeight: number; marginX: number; marginY: number; pageMode: string; doublePageStep: number
+}
+const customThemes = ref<CustomTheme[]>([])
+const newThemeName = ref('')
+
 const loadSettings = async () => {
   try {
     const r = await window.electronAPI.db.query('SELECT * FROM settings')
@@ -104,6 +115,11 @@ const loadSettings = async () => {
         if (s.key === 'reader_coverColor') coverColor.value = s.value || '#0f172a'
         if (s.key === 'bgImage') bgImage.value = s.value || ''
         if (s.key === 'reader_flipMode') flipMode.value = (s.value === 'cover' ? 'cover' : 'slide')
+        if (s.key === 'reader_pageMode') pageMode.value = (s.value === 'double' ? 'double' : 'single')
+        if (s.key === 'reader_doublePageStep') doublePageStep.value = (parseInt(s.value) === 1 ? 1 : 2)
+        if (s.key === 'custom_themes') {
+          try { customThemes.value = JSON.parse(s.value) || [] } catch (_) {}
+        }
       })
     }
     try { systemFonts.value = await window.electronAPI.font.getSystemFonts() } catch (_) { systemFonts.value = [] }
@@ -119,11 +135,51 @@ const updateStyling = () => {
   saveSetting('reader_marginX', marginX.value); saveSetting('reader_marginY', marginY.value)
   saveSetting('reader_fontFamily', fontFamily.value); saveSetting('reader_fontColor', fontColor.value)
   saveSetting('reader_coverColor', coverColor.value)
+  saveSetting('reader_pageMode', pageMode.value)
+  saveSetting('reader_doublePageStep', doublePageStep.value)
   recalc()
 }
 const setFlipMode = (mode: 'slide' | 'cover') => {
   flipMode.value = mode
   saveSetting('reader_flipMode', mode)
+}
+
+const applyThemeConfig = (t: Partial<CustomTheme>) => {
+  if (t.bgImage !== undefined) bgImage.value = t.bgImage
+  if (t.coverColor !== undefined) coverColor.value = t.coverColor
+  if (t.fontColor !== undefined) fontColor.value = t.fontColor
+  if (t.fontFamily !== undefined) fontFamily.value = t.fontFamily
+  if (t.fontSize !== undefined) fontSize.value = t.fontSize
+  if (t.lineHeight !== undefined) lineHeight.value = t.lineHeight
+  if (t.letterSpacing !== undefined) letterSpacing.value = t.letterSpacing
+  if (t.fontWeight !== undefined) fontWeight.value = t.fontWeight
+  if (t.marginX !== undefined) marginX.value = t.marginX
+  if (t.marginY !== undefined) marginY.value = t.marginY
+  if (t.pageMode !== undefined) pageMode.value = t.pageMode as 'single' | 'double'
+  if (t.doublePageStep !== undefined) doublePageStep.value = t.doublePageStep as 1 | 2
+  updateStyling()
+}
+
+const applyTheme = (type: string) => {
+  if (type === 'dark') { applyThemeConfig({ bgImage: '', coverColor: '#0f172a', fontColor: '#e2e8f0' }) }
+  else if (type === 'paper') { applyThemeConfig({ bgImage: '', coverColor: '#f4ecd8', fontColor: '#5c4b37' }) }
+  else if (type === 'green') { applyThemeConfig({ bgImage: '', coverColor: '#cce8cf', fontColor: '#2a4b2a' }) }
+}
+
+const saveTheme = async () => {
+  if (!newThemeName.value.trim()) return
+  customThemes.value.push({
+    id: Date.now(), name: newThemeName.value.trim(), bgImage: bgImage.value, coverColor: coverColor.value,
+    fontColor: fontColor.value, fontFamily: fontFamily.value, fontSize: fontSize.value, lineHeight: lineHeight.value,
+    letterSpacing: letterSpacing.value, fontWeight: fontWeight.value, marginX: marginX.value, marginY: marginY.value,
+    pageMode: pageMode.value, doublePageStep: doublePageStep.value
+  })
+  await window.electronAPI.db.query("INSERT OR REPLACE INTO settings (key, value) VALUES ('custom_themes', ?)", [JSON.stringify(customThemes.value)])
+  newThemeName.value = ''
+}
+const deleteTheme = async (id: number) => {
+  customThemes.value = customThemes.value.filter(t => t.id !== id)
+  await window.electronAPI.db.query("INSERT OR REPLACE INTO settings (key, value) VALUES ('custom_themes', ?)", [JSON.stringify(customThemes.value)])
 }
 
 // ---- Replacement rules ----
@@ -221,7 +277,8 @@ const calculatePages = () => {
   if (!contentRef.value || !containerRef.value) return
   const cw = containerRef.value.clientWidth
   if (cw <= 0) return
-  totalPages.value = Math.max(1, Math.ceil(contentRef.value.scrollWidth / cw))
+  const pageWidth = pageMode.value === 'double' ? cw / 2 : cw
+  totalPages.value = Math.max(1, Math.ceil(contentRef.value.scrollWidth / pageWidth))
   if (currentPage.value >= totalPages.value) currentPage.value = totalPages.value - 1
   calcPrevPages()
 }
@@ -229,16 +286,19 @@ const calcPrevPages = () => {
   if (!prevContentRef.value || !prevContainerRef.value) return
   const cw = prevContainerRef.value.clientWidth
   if (cw <= 0) return
-  prevPageCount.value = Math.max(1, Math.ceil(prevContentRef.value.scrollWidth / cw))
+  const pageWidth = pageMode.value === 'double' ? cw / 2 : cw
+  prevPageCount.value = Math.max(1, Math.ceil(prevContentRef.value.scrollWidth / pageWidth))
 }
 
 const pageOffset = computed(() => {
   if (!containerRef.value) return '0px'
-  return `-${currentPage.value * containerRef.value.clientWidth}px`
+  const pageWidth = pageMode.value === 'double' ? containerRef.value.clientWidth / 2 : containerRef.value.clientWidth
+  return `-${currentPage.value * pageWidth}px`
 })
 const prevPageOffset = computed(() => {
   if (!prevContainerRef.value) return '0px'
-  return `-${Math.max(0, prevPageCount.value - 1) * prevContainerRef.value.clientWidth}px`
+  const pageWidth = pageMode.value === 'double' ? prevContainerRef.value.clientWidth / 2 : prevContainerRef.value.clientWidth
+  return `-${Math.max(0, prevPageCount.value - 1) * pageWidth}px`
 })
 
 const saveProgress = async () => {
@@ -263,37 +323,49 @@ const slideToNextChapter = () => {
   if (flipLock || currentChapterIndex.value >= chapters.value.length - 1) return
   flipLock = true
   suppressAnim.value = true
-  carouselSliding.value = true
-  carouselPos.value = 1
-  setTimeout(() => {
-    carouselSliding.value = false
+  
+  const finishFlip = () => {
     currentChapterIndex.value++
     currentPage.value = 0
-    carouselPos.value = 0
     saveProgress()
-    nextTick(() => { requestAnimationFrame(() => { calculatePages(); requestAnimationFrame(() => { suppressAnim.value = false; flipLock = false }) }) })
-  }, 380)
+    nextTick(() => { requestAnimationFrame(() => { calculatePages(); requestAnimationFrame(() => { suppressAnim.value = false; coverDir.value = ''; carouselSliding.value = false; flipLock = false }) }) })
+  }
+
+  if (flipMode.value === 'cover') {
+    coverDir.value = 'cover-left'
+    requestAnimationFrame(() => { currentChapterIndex.value++; currentPage.value = 0 })
+    setTimeout(() => { finishFlip() }, 380)
+  } else {
+    carouselSliding.value = true
+    carouselPos.value = 1
+    setTimeout(() => { carouselPos.value = 0; finishFlip() }, 380)
+  }
 }
 
 const slideToPrevChapter = () => {
   if (flipLock || currentChapterIndex.value <= 0) return
   flipLock = true
   suppressAnim.value = true
-  carouselSliding.value = true
-  carouselPos.value = -1
-  setTimeout(() => {
-    carouselSliding.value = false
-    currentChapterIndex.value--
-    carouselPos.value = 0
+
+  const finishFlip = () => {
     nextTick(() => {
-      requestAnimationFrame(() => {
-        calculatePages()
-        currentPage.value = Math.max(0, totalPages.value - 1)
-        saveProgress()
-        requestAnimationFrame(() => { suppressAnim.value = false; flipLock = false })
-      })
+      calculatePages()
+      const step = (pageMode.value === 'double' && doublePageStep.value === 2) ? 2 : 1
+      currentPage.value = Math.max(0, Math.floor((totalPages.value - 1) / step) * step)
+      saveProgress()
+      requestAnimationFrame(() => { suppressAnim.value = false; coverDir.value = ''; carouselSliding.value = false; flipLock = false })
     })
-  }, 380)
+  }
+
+  if (flipMode.value === 'cover') {
+    coverDir.value = 'cover-right'
+    requestAnimationFrame(() => { currentChapterIndex.value-- })
+    setTimeout(() => { finishFlip() }, 380)
+  } else {
+    carouselSliding.value = true
+    carouselPos.value = -1
+    setTimeout(() => { carouselPos.value = 0; currentChapterIndex.value--; finishFlip() }, 380)
+  }
 }
 
 const goToChapter = (idx: number, keepMenu = false) => {
@@ -329,8 +401,11 @@ const doPageFlip = (dir: 'left' | 'right', action: () => void) => {
 
 const nextPage = () => {
   if (flipLock) return
-  if (currentPage.value < totalPages.value - 1) {
-    doPageFlip('left', () => { currentPage.value++ })
+  const step = (pageMode.value === 'double' && doublePageStep.value === 2) ? 2 : 1
+  if (currentPage.value < totalPages.value - step) {
+    doPageFlip('left', () => { currentPage.value += step })
+  } else if (currentPage.value < totalPages.value - 1 && step === 2) {
+    doPageFlip('left', () => { currentPage.value += 1 })
   } else {
     slideToNextChapter()
   }
@@ -338,8 +413,11 @@ const nextPage = () => {
 
 const prevPage = () => {
   if (flipLock) return
-  if (currentPage.value > 0) {
-    doPageFlip('right', () => { currentPage.value-- })
+  const step = (pageMode.value === 'double' && doublePageStep.value === 2) ? 2 : 1
+  if (currentPage.value >= step) {
+    doPageFlip('right', () => { currentPage.value -= step })
+  } else if (currentPage.value > 0) {
+    doPageFlip('right', () => { currentPage.value = 0 })
   } else {
     slideToPrevChapter()
   }
@@ -467,7 +545,7 @@ onUnmounted(() => {
             <div ref="prevContentRef" class="pg-ct" :style="{
               ...textStyle,
               transform: `translateX(${prevPageOffset})`,
-              columnWidth: `calc(100vw - ${marginX * 2}px)`,
+              columnWidth: pageMode === 'double' ? `calc(50vw - ${marginX * 2}px)` : `calc(100vw - ${marginX * 2}px)`,
               columnGap: `${marginX * 2}px`, columnFill: 'auto',
             }" v-if="prevChapterData">
               <h2 class="ch-title" :style="{ fontSize: (fontSize*1.4)+'px', color: fontColor }">{{ prevChapterData.title }}</h2>
@@ -482,7 +560,7 @@ onUnmounted(() => {
             <div ref="contentRef" class="pg-ct" :class="{ 'pg-anim': !suppressAnim }" :style="{
               ...textStyle,
               transform: `translateX(${pageOffset})`,
-              columnWidth: `calc(100vw - ${marginX * 2}px)`,
+              columnWidth: pageMode === 'double' ? `calc(50vw - ${marginX * 2}px)` : `calc(100vw - ${marginX * 2}px)`,
               columnGap: `${marginX * 2}px`, columnFill: 'auto',
             }">
               <h2 class="ch-title" :style="{ fontSize: (fontSize*1.4)+'px', color: fontColor }">{{ currentChapterData?.title }}</h2>
@@ -517,14 +595,14 @@ onUnmounted(() => {
             <div class="m-acts">
               <button @click="toggleImmersiveMode" class="m-btn">{{ isImmersive ? '退出全屏' : '全屏' }}</button>
               <button @click="openPanel('search')" class="m-btn" :class="{active:showSearch}">🔍 搜索</button>
-              <button @click="openPanel('toc')" class="m-btn" :class="{active:showToc}">☰ 目录</button>
               <button @click="openPanel('rules')" class="m-btn" :class="{active:showRules}">📝 替换</button>
               <button @click="openPanel('styling')" class="m-btn" :class="{active:showStyling}">Aa 排版</button>
             </div>
           </div>
           <div class="m-bot" @click.stop>
+            <button @click="openPanel('toc')" class="m-btn m-toc" :class="{active:showToc}">☰ 目录</button>
             <button @click="goToChapter(currentChapterIndex-1,true)" :disabled="currentChapterIndex===0" class="m-ch">⏮ 上一章</button>
-            <div class="m-prog"><input type="range" min="0" max="100" :value="progressPercent" @input="handleProgressSlider" class="m-slider"><div class="m-pct">{{ progressPercent }}%</div></div>
+            <div class="m-prog"><input type="range" min="0" max="100" :value="progressPercent" @input="handleProgressSlider" class="m-slider"></div>
             <button @click="goToChapter(currentChapterIndex+1,true)" :disabled="currentChapterIndex>=chapters.length-1" class="m-ch">下一章 ⏭</button>
           </div>
           <div class="m-info" @click.stop>
@@ -624,6 +702,46 @@ onUnmounted(() => {
               <div class="sr"><label>左右边距</label><input type="range" min="0" max="200" step="1" v-model.number="marginX" @input="updateStyling" class="sl"><input type="number" v-model.number="marginX" @change="updateStyling" class="sn"><span class="su">px</span></div>
               <div class="sr"><label>上下边距</label><input type="range" min="0" max="150" step="1" v-model.number="marginY" @input="updateStyling" class="sl"><input type="number" v-model.number="marginY" @change="updateStyling" class="sn"><span class="su">px</span></div>
               <div class="sr"><label>翻页底色</label><input type="color" v-model="coverColor" @input="updateStyling" class="sc"><input type="text" v-model="coverColor" @change="updateStyling" class="sn w72"><small class="sw-note">*有背景图时自动适配</small></div>
+              <div class="sp-divider"></div>
+              <div class="sr">
+                <label>视图模式</label>
+                <div class="btn-group">
+                  <button @click="pageMode='single'; updateStyling()" :class="{active: pageMode==='single'}">单页</button>
+                  <button @click="pageMode='double'; updateStyling()" :class="{active: pageMode==='double'}">双页(横屏)</button>
+                </div>
+              </div>
+              <div class="sr" v-if="pageMode==='double'">
+                <label>翻页步长</label>
+                <div class="btn-group">
+                  <button @click="doublePageStep=1; updateStyling()" :class="{active: doublePageStep===1}">1页</button>
+                  <button @click="doublePageStep=2; updateStyling()" :class="{active: doublePageStep===2}">2页</button>
+                </div>
+              </div>
+              <div class="sp-divider"></div>
+              <div class="sr themes-sr">
+                <label>预设主题</label>
+                <div class="btn-group theme-btns">
+                  <button @click="applyTheme('dark')">深色</button>
+                  <button @click="applyTheme('paper')">纸质/羊皮纸</button>
+                  <button @click="applyTheme('green')">护眼绿</button>
+                </div>
+              </div>
+              <div class="sr themes-sr">
+                <label>保存当前</label>
+                <div class="flex-row">
+                  <input type="text" v-model="newThemeName" placeholder="新主题名称" class="sn flex-1" style="width: auto;">
+                  <button @click="saveTheme" class="s-btn">保存</button>
+                </div>
+              </div>
+              <div class="sr themes-sr" v-if="customThemes.length > 0">
+                <label>自定义</label>
+                <div class="theme-list">
+                  <div v-for="t in customThemes" :key="t.id" class="theme-tag">
+                    <button @click="applyThemeConfig(t)" class="theme-n">{{ t.name }}</button>
+                    <button @click="deleteTheme(t.id)" class="theme-d">✕</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </Transition>
         </div>
@@ -788,6 +906,26 @@ onUnmounted(() => {
 .ss option { background:#0f172a; color:white; }
 .sc { width:36px; height:30px; border:1px solid rgba(255,255,255,0.15); border-radius:8px; background:transparent; cursor:pointer; padding:2px; }
 .sw-note { font-size:10px; color:rgba(255,255,255,0.3); margin-left:4px; }
+.sp-divider { height:1px; background:rgba(255,255,255,0.06); margin:20px 0; }
+.btn-group { display:flex; gap:6px; flex:1; }
+.btn-group button { flex:1; padding:6px; border-radius:8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:white; font-size:12px; cursor:pointer; transition:all .2s; }
+.btn-group button:hover { background:rgba(255,255,255,0.1); }
+.btn-group button.active { background:#3b82f6; border-color:#3b82f6; font-weight:700; }
+.theme-btns { flex-wrap:wrap; }
+.theme-btns button { min-width:30%; }
+.themes-sr { align-items:flex-start; }
+.themes-sr label { margin-top:6px; }
+.flex-row { display:flex; gap:8px; flex:1; }
+.flex-1 { flex:1; }
+.s-btn { padding:6px 12px; border-radius:8px; background:#3b82f6; border:none; color:white; font-size:12px; font-weight:700; cursor:pointer; transition:all .2s; }
+.s-btn:hover { background:#2563eb; }
+.theme-list { display:flex; flex-wrap:wrap; gap:8px; flex:1; }
+.theme-tag { display:flex; align-items:center; background:rgba(255,255,255,0.08); border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); }
+.theme-n { padding:4px 8px; font-size:11px; color:white; background:none; border:none; cursor:pointer; }
+.theme-n:hover { background:rgba(255,255,255,0.1); }
+.theme-d { padding:4px 6px; font-size:10px; color:rgba(239,68,68,0.7); background:none; border:none; border-left:1px solid rgba(255,255,255,0.1); cursor:pointer; }
+.theme-d:hover { background:rgba(239,68,68,0.2); color:#ef4444; }
+.m-toc { position: absolute; left: 24px; }
 
 /* Transitions */
 .fade-enter-active,.fade-leave-active { transition:opacity .25s ease; }
