@@ -35,8 +35,6 @@ jobs:
         with:
           files: |
             release/*.exe
-            release/*.yml
-            release/*.yaml
             release/latest.yml
           draft: false
           prerelease: false

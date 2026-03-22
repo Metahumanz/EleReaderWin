@@ -31,6 +31,9 @@ const fontFamily = ref('system-ui')
 const fontColor = ref('#e2e8f0')
 const systemFonts = ref<string[]>([])
 
+// Flip mode: 'slide' or 'cover'
+const flipMode = ref<'slide' | 'cover'>('slide')
+
 // Pagination
 const currentPage = ref(0)
 const totalPages = ref(1)
@@ -41,9 +44,13 @@ const containerRef = ref<HTMLElement | null>(null)
 const prevContentRef = ref<HTMLElement | null>(null)
 const prevContainerRef = ref<HTMLElement | null>(null)
 const carouselSliding = ref(false)
-const carouselPos = ref(0) // -1, 0, 1
+const carouselPos = ref(0)
 const prevPageCount = ref(1)
 const tocListRef = ref<HTMLElement | null>(null)
+const suppressAnim = ref(false) // suppress translateX transition during chapter switch
+
+// Cover mode animation
+const coverDir = ref<'' | 'cover-left' | 'cover-right'>('')
 
 let flipLock = false
 
@@ -78,6 +85,7 @@ const loadSettings = async () => {
         if (s.key === 'reader_fontFamily') fontFamily.value = s.value || 'system-ui'
         if (s.key === 'reader_fontColor') fontColor.value = s.value || '#e2e8f0'
         if (s.key === 'bgImage') bgImage.value = s.value || ''
+        if (s.key === 'reader_flipMode') flipMode.value = (s.value === 'cover' ? 'cover' : 'slide')
       })
     }
     try { systemFonts.value = await window.electronAPI.font.getSystemFonts() } catch (_) { systemFonts.value = [] }
@@ -94,20 +102,21 @@ const updateStyling = () => {
   saveSetting('reader_fontFamily', fontFamily.value); saveSetting('reader_fontColor', fontColor.value)
   recalc()
 }
+const setFlipMode = (mode: 'slide' | 'cover') => {
+  flipMode.value = mode
+  saveSetting('reader_flipMode', mode)
+}
 
 // ---- Pagination ----
 const recalc = () => { nextTick(() => { setTimeout(calculatePages, 60) }) }
-
 const calculatePages = () => {
   if (!contentRef.value || !containerRef.value) return
   const cw = containerRef.value.clientWidth
   if (cw <= 0) return
   totalPages.value = Math.max(1, Math.ceil(contentRef.value.scrollWidth / cw))
   if (currentPage.value >= totalPages.value) currentPage.value = totalPages.value - 1
-  // Also calculate prev chapter page count for the prev container
   calcPrevPages()
 }
-
 const calcPrevPages = () => {
   if (!prevContentRef.value || !prevContainerRef.value) return
   const cw = prevContainerRef.value.clientWidth
@@ -119,12 +128,9 @@ const pageOffset = computed(() => {
   if (!containerRef.value) return '0px'
   return `-${currentPage.value * containerRef.value.clientWidth}px`
 })
-
-// Prev container shows its LAST page
 const prevPageOffset = computed(() => {
   if (!prevContainerRef.value) return '0px'
-  const lastPage = Math.max(0, prevPageCount.value - 1)
-  return `-${lastPage * prevContainerRef.value.clientWidth}px`
+  return `-${Math.max(0, prevPageCount.value - 1) * prevContainerRef.value.clientWidth}px`
 })
 
 const saveProgress = async () => {
@@ -135,32 +141,34 @@ const saveProgress = async () => {
   } catch (e) { console.error(e) }
 }
 
-// ---- Chapter data ----
+// Chapter data
 const currentChapterData = computed(() => chapters.value[currentChapterIndex.value] || null)
 const prevChapterData = computed(() => { const i = currentChapterIndex.value - 1; return i >= 0 ? chapters.value[i] : null })
 const nextChapterData = computed(() => { const i = currentChapterIndex.value + 1; return i < chapters.value.length ? chapters.value[i] : null })
 
-// ---- Carousel chapter transition (seamless like page turn) ----
+// ---- Carousel chapter transition ----
 const slideToNextChapter = () => {
   if (flipLock || currentChapterIndex.value >= chapters.value.length - 1) return
   flipLock = true
+  suppressAnim.value = true // prevent translateX animation on current content
   carouselSliding.value = true
-  carouselPos.value = 1 // slide left to show next chapter
+  carouselPos.value = 1
   setTimeout(() => {
-    carouselSliding.value = false // disable transition
+    carouselSliding.value = false
     currentChapterIndex.value++
     currentPage.value = 0
-    carouselPos.value = 0 // snap back (no transition)
+    carouselPos.value = 0
     saveProgress()
-    nextTick(() => { setTimeout(() => { calculatePages(); flipLock = false }, 80) })
+    nextTick(() => { setTimeout(() => { calculatePages(); suppressAnim.value = false; flipLock = false }, 100) })
   }, 380)
 }
 
 const slideToPrevChapter = () => {
   if (flipLock || currentChapterIndex.value <= 0) return
   flipLock = true
+  suppressAnim.value = true
   carouselSliding.value = true
-  carouselPos.value = -1 // slide right to show prev chapter (which shows last page)
+  carouselPos.value = -1
   setTimeout(() => {
     carouselSliding.value = false
     currentChapterIndex.value--
@@ -170,27 +178,48 @@ const slideToPrevChapter = () => {
       setTimeout(() => {
         calculatePages()
         currentPage.value = Math.max(0, totalPages.value - 1)
+        suppressAnim.value = false
         flipLock = false
-      }, 80)
+      }, 100)
     })
   }, 380)
 }
 
 const goToChapter = (idx: number, keepMenu = false) => {
   if (idx >= 0 && idx < chapters.value.length && idx !== currentChapterIndex.value) {
+    suppressAnim.value = true
     currentChapterIndex.value = idx
     currentPage.value = 0
     saveProgress()
-    recalc()
+    nextTick(() => { setTimeout(() => { calculatePages(); suppressAnim.value = false }, 100) })
   }
   if (!keepMenu) closeAll()
 }
 
 // ---- Page navigation ----
+const doPageFlip = (dir: 'left' | 'right', action: () => void) => {
+  if (flipMode.value === 'cover') {
+    // Cover mode: animate clip-path
+    flipLock = true
+    coverDir.value = dir === 'left' ? 'cover-left' : 'cover-right'
+    // Change page immediately (content snaps under the cover animation)
+    suppressAnim.value = true
+    action()
+    setTimeout(() => {
+      suppressAnim.value = false
+      coverDir.value = ''
+      flipLock = false
+    }, 350)
+  } else {
+    // Slide mode: just change the page, CSS transition handles it
+    action()
+  }
+}
+
 const nextPage = () => {
   if (flipLock) return
   if (currentPage.value < totalPages.value - 1) {
-    currentPage.value++
+    doPageFlip('left', () => { currentPage.value++ })
   } else {
     slideToNextChapter()
   }
@@ -199,7 +228,7 @@ const nextPage = () => {
 const prevPage = () => {
   if (flipLock) return
   if (currentPage.value > 0) {
-    currentPage.value--
+    doPageFlip('right', () => { currentPage.value-- })
   } else {
     slideToPrevChapter()
   }
@@ -210,8 +239,8 @@ const closeAll = () => { showMenu.value = false; showStyling.value = false; show
 
 const handleClick = (e: MouseEvent) => {
   const t = e.target as HTMLElement
-  if (t.closest('.menu-top') || t.closest('.menu-bottom') || t.closest('.menu-info') ||
-      t.closest('.styling-panel') || t.closest('.toc-panel')) return
+  if (t.closest('.m-top') || t.closest('.m-bot') || t.closest('.m-info') ||
+      t.closest('.sty-p') || t.closest('.toc-p')) return
   if (showMenu.value) { closeAll(); return }
   const x = e.clientX, w = window.innerWidth
   if (x < w * 0.3) prevPage()
@@ -229,22 +258,15 @@ const handleWheel = (e: WheelEvent) => {
 
 const handleKeydown = (e: KeyboardEvent) => {
   if (showMenu.value) return
-  const k = e.key
-  const code = e.code
-  // Right / D / Numpad6 / PageDown = next page
-  if (k === 'ArrowRight' || k === 'd' || k === 'D' || code === 'Numpad6' || k === 'PageDown' ||
-      k === 'ArrowDown' || k === 's' || k === 'S' || code === 'Numpad2') {
-    e.preventDefault(); nextPage()
-  }
-  // Left / A / Numpad4 / PageUp = prev page
-  else if (k === 'ArrowLeft' || k === 'a' || k === 'A' || code === 'Numpad4' || k === 'PageUp' ||
-           k === 'ArrowUp' || k === 'w' || k === 'W' || code === 'Numpad8') {
-    e.preventDefault(); prevPage()
-  }
+  const k = e.key, c = e.code
+  if (k === 'ArrowRight' || k === 'd' || k === 'D' || c === 'Numpad6' || k === 'PageDown' ||
+      k === 'ArrowDown' || k === 's' || k === 'S' || c === 'Numpad2') { e.preventDefault(); nextPage() }
+  else if (k === 'ArrowLeft' || k === 'a' || k === 'A' || c === 'Numpad4' || k === 'PageUp' ||
+           k === 'ArrowUp' || k === 'w' || k === 'W' || c === 'Numpad8') { e.preventDefault(); prevPage() }
 }
 
 const toggleImmersiveMode = () => { isImmersive.value = !isImmersive.value; emit('toggle-immersive', isImmersive.value) }
-const handleGoBack = () => { closeAll(); emit('go-back') }
+const handleGoBack = () => { saveProgress(); closeAll(); emit('go-back') }
 
 const progressPercent = computed(() => {
   if (chapters.value.length === 0) return 0
@@ -269,24 +291,20 @@ const textStyle = computed(() => ({
   fontWeight: String(fontWeight.value), color: fontColor.value,
 }))
 
-// Carousel transform
-const carouselTransform = computed(() => {
-  const base = -100 + carouselPos.value * -100
-  return `translateX(${base}vw)`
-})
+const carouselTransform = computed(() => `translateX(${-100 + carouselPos.value * -100}vw)`)
 
-// TOC scroll
 watch(showToc, (v) => {
-  if (v) {
-    nextTick(() => {
-      const el = tocListRef.value?.querySelector('.toc-active') as HTMLElement
-      if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
-    })
-  }
+  if (v) nextTick(() => {
+    const el = tocListRef.value?.querySelector('.toc-active') as HTMLElement
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
+  })
 })
 
 watch(currentChapterIndex, () => recalc())
 watch([fontSize, lineHeight, letterSpacing, marginX, marginY, fontFamily, fontWeight], () => recalc())
+
+// Save progress periodically
+watch(currentPage, () => saveProgress())
 
 onMounted(async () => {
   await loadSettings(); await fetchBook(); await fetchChapters()
@@ -296,6 +314,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
 })
 onUnmounted(() => {
+  saveProgress()
   window.removeEventListener('resize', recalc)
   window.removeEventListener('keydown', handleKeydown)
 })
@@ -306,9 +325,12 @@ onUnmounted(() => {
     <div v-if="loading" class="load"><div class="spinner"></div><p>正在载入...</p></div>
 
     <template v-else>
+      <!-- Cover animation overlay -->
+      <div v-if="coverDir" class="cover-overlay" :class="coverDir"></div>
+
       <!-- Three-container carousel -->
       <div class="carousel" :class="{ sliding: carouselSliding }" :style="{ transform: carouselTransform }">
-        <!-- PREV chapter (shows last page) -->
+        <!-- PREV chapter (last page) -->
         <div class="slide">
           <div ref="prevContainerRef" class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px` }">
             <div ref="prevContentRef" class="pg-ct" :style="{
@@ -323,10 +345,10 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- CURRENT chapter (paginated) -->
+        <!-- CURRENT chapter -->
         <div class="slide">
           <div ref="containerRef" class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px` }">
-            <div ref="contentRef" class="pg-ct pg-anim" :style="{
+            <div ref="contentRef" class="pg-ct" :class="{ 'pg-anim': !suppressAnim }" :style="{
               ...textStyle,
               transform: `translateX(${pageOffset})`,
               columnWidth: `calc(100vw - ${marginX * 2}px)`,
@@ -338,7 +360,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- NEXT chapter (shows first page) -->
+        <!-- NEXT chapter (first page) -->
         <div class="slide">
           <div class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px` }">
             <div class="pg-ct" :style="textStyle" v-if="nextChapterData">
@@ -376,6 +398,12 @@ onUnmounted(() => {
             <span>第 {{ currentChapterIndex+1 }}/{{ chapters.length }} 章</span>
             <span>「{{ currentChapterData?.title }}」</span>
             <span>第 {{ currentPage+1 }}/{{ totalPages }} 页</span>
+            <!-- Flip mode toggle -->
+            <span class="flip-toggle">
+              翻页:
+              <button @click="setFlipMode('slide')" class="ft-btn" :class="{ftActive: flipMode==='slide'}">平移</button>
+              <button @click="setFlipMode('cover')" class="ft-btn" :class="{ftActive: flipMode==='cover'}">覆盖</button>
+            </span>
           </div>
 
           <Transition name="sf">
@@ -395,7 +423,7 @@ onUnmounted(() => {
               <div class="sr"><label>字体</label><select v-model="fontFamily" @change="updateStyling" class="ss"><option value="system-ui">系统默认</option><option value="serif">宋体</option><option value="'Microsoft YaHei'">微软雅黑</option><option v-for="f in systemFonts" :key="f" :value="`'${f}'`">{{ f }}</option></select></div>
               <div class="sr"><label>字色</label><input type="color" v-model="fontColor" @input="updateStyling" class="sc"><input type="text" v-model="fontColor" @change="updateStyling" class="sn w72"></div>
               <div class="sr"><label>字号</label><input type="range" min="12" max="64" step="1" v-model.number="fontSize" @input="updateStyling" class="sl"><input type="number" v-model.number="fontSize" @change="updateStyling" class="sn"><span class="su">px</span></div>
-              <div class="sr"><label>字重</label><input type="range" min="100" max="900" step="1" v-model.number="fontWeight" @input="updateStyling" class="sl"><input type="number" v-model.number="fontWeight" @change="updateStyling" class="sn"><small class="sw-note">*效果取决于字体</small></div>
+              <div class="sr"><label>字重</label><input type="range" min="100" max="900" step="1" v-model.number="fontWeight" @input="updateStyling" class="sl"><input type="number" v-model.number="fontWeight" @change="updateStyling" class="sn"><small class="sw-note">*取决于字体</small></div>
               <div class="sr"><label>行间距</label><input type="range" min="1" max="4" step="0.1" v-model.number="lineHeight" @input="updateStyling" class="sl"><input type="number" v-model.number="lineHeight" step="0.1" @change="updateStyling" class="sn"></div>
               <div class="sr"><label>字间距</label><input type="range" min="-0.1" max="1" step="0.01" v-model.number="letterSpacing" @input="updateStyling" class="sl"><input type="number" v-model.number="letterSpacing" step="0.01" @change="updateStyling" class="sn"><span class="su">em</span></div>
               <div class="sr"><label>左右边距</label><input type="range" min="0" max="200" step="1" v-model.number="marginX" @input="updateStyling" class="sl"><input type="number" v-model.number="marginX" @change="updateStyling" class="sn"><span class="su">px</span></div>
@@ -414,6 +442,19 @@ onUnmounted(() => {
 .spinner { width:40px; height:40px; border:2px solid rgba(59,130,246,0.2); border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg) } }
 
+/* Cover overlay */
+.cover-overlay { position:absolute; inset:0; z-index:5; pointer-events:none; }
+.cover-overlay.cover-left { animation: coverLeft 0.35s ease-out forwards; }
+.cover-overlay.cover-right { animation: coverRight 0.35s ease-out forwards; }
+@keyframes coverLeft {
+  0%   { clip-path: inset(0 0 0 100%); background: linear-gradient(to left, rgba(0,0,0,0.15), transparent 40%); }
+  100% { clip-path: inset(0); background: transparent; }
+}
+@keyframes coverRight {
+  0%   { clip-path: inset(0 100% 0 0); background: linear-gradient(to right, rgba(0,0,0,0.15), transparent 40%); }
+  100% { clip-path: inset(0); background: transparent; }
+}
+
 /* Carousel */
 .carousel { display:flex; width:300vw; height:100%; transform:translateX(-100vw); z-index:1; }
 .carousel.sliding { transition: transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94); }
@@ -426,6 +467,8 @@ onUnmounted(() => {
 .ch-title { font-weight:700; margin-bottom:1.5em; opacity:0.85; }
 .ch-body { height:100%; }
 .ch-body :deep(p) { text-indent:2em; margin-bottom:0.8em; }
+.ch-body :deep(p:first-child) { text-indent:2em; }
+.ch-body :deep(> *:first-child) { text-indent:2em; }
 
 /* HUD */
 .hud { position:absolute; bottom:16px; left:24px; right:24px; display:flex; justify-content:space-between; pointer-events:none; z-index:10; }
@@ -450,7 +493,13 @@ onUnmounted(() => {
 .m-slider { width:100%; height:6px; -webkit-appearance:none; appearance:none; background:rgba(255,255,255,0.1); border-radius:3px; outline:none; cursor:pointer; }
 .m-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; background:white; border:2px solid #3b82f6; border-radius:50%; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
 .m-pct { font-size:10px; font-family:monospace; color:rgba(255,255,255,0.5); }
-.m-info { display:flex; justify-content:space-between; padding:0 24px 10px; font-size:11px; color:rgba(255,255,255,0.4); font-weight:600; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); }
+.m-info { display:flex; align-items:center; justify-content:space-between; padding:0 24px 10px; font-size:11px; color:rgba(255,255,255,0.4); font-weight:600; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); gap:12px; flex-wrap:wrap; }
+
+/* Flip mode toggle */
+.flip-toggle { display:flex; align-items:center; gap:4px; margin-left:auto; }
+.ft-btn { padding:2px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:transparent; color:rgba(255,255,255,0.4); font-size:10px; font-weight:700; cursor:pointer; transition:all .15s; }
+.ft-btn:hover { color:rgba(255,255,255,0.7); }
+.ftActive { background:#3b82f6!important; border-color:#3b82f6!important; color:white!important; }
 
 /* TOC */
 .toc-p { position:absolute; left:20px; top:60px; bottom:120px; width:300px; background:rgba(15,23,42,0.95); backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:16px; z-index:60; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column; }
