@@ -287,7 +287,10 @@ onUnmounted(() => {
           <button @click="showMenu = false" class="p-2 hover:bg-white/10 rounded-xl transition-all">
             <span class="text-xl">✕</span>
           </button>
-          <div class="ml-4 font-bold truncate max-w-[40%] text-slate-200">{{ book?.title }}</div>
+          <div class="ml-4 font-bold truncate max-w-[40%] text-slate-200">
+            {{ book?.title }}
+            <span class="ml-2 text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md border border-blue-500/20">v0.1.2</span>
+          </div>
           
           <div class="ml-auto flex items-center gap-3">
             <button 
