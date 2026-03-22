@@ -106,8 +106,11 @@ async function initDatabase(): Promise<void> {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL, author TEXT, cover_path TEXT, path TEXT,
     progress_index INTEGER DEFAULT 0, progress_offset INTEGER DEFAULT 0,
-    last_read DATETIME DEFAULT CURRENT_TIMESTAMP, source_id INTEGER
+    last_read DATETIME DEFAULT CURRENT_TIMESTAMP, source_id INTEGER,
+    pinned INTEGER DEFAULT 0
   )`)
+  // Migration: add pinned column if missing (existing DBs)
+  try { db.run('ALTER TABLE books ADD COLUMN pinned INTEGER DEFAULT 0') } catch (_) {}
   db.run(`CREATE TABLE IF NOT EXISTS chapters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     book_id INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,

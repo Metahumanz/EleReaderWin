@@ -10,6 +10,7 @@ interface Book {
   progress_index: number
   progress_offset: number
   last_read: string
+  pinned: number
 }
 
 const emit = defineEmits<{
@@ -23,7 +24,7 @@ const importing = ref(false)
 const fetchBooks = async () => {
   try {
     loading.value = true
-    const result = await window.electronAPI.db.query('SELECT * FROM books ORDER BY last_read DESC')
+    const result = await window.electronAPI.db.query('SELECT * FROM books ORDER BY pinned DESC, last_read DESC')
     books.value = result as Book[]
   } catch (error) {
     console.error('Failed to fetch books:', error)
@@ -71,6 +72,25 @@ const setCover = async (bookId: number) => {
   }
 }
 
+const removeCover = async (bookId: number) => {
+  try {
+    await window.electronAPI.db.query('UPDATE books SET cover_path = NULL WHERE id = ?', [bookId])
+    await fetchBooks()
+  } catch (error) {
+    console.error('Failed to remove cover:', error)
+  }
+}
+
+const togglePin = async (book: Book) => {
+  const newVal = book.pinned ? 0 : 1
+  try {
+    await window.electronAPI.db.query('UPDATE books SET pinned = ? WHERE id = ?', [newVal, book.id])
+    await fetchBooks()
+  } catch (error) {
+    console.error('Failed to toggle pin:', error)
+  }
+}
+
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('zh-CN')
 }
@@ -100,13 +120,18 @@ onMounted(() => fetchBooks())
     <div v-else-if="books.length === 0" class="text-center py-24 glass-dark rounded-3xl border-dashed border-2 border-white/5 mx-auto max-w-md">
       <div class="text-6xl mb-6">📚</div>
       <p class="text-lg text-slate-300 mb-6">书架空空如也</p>
+      <p class="text-sm text-slate-500 mb-4">支持 TXT 和 EPUB 格式</p>
       <button @click="addBook" class="px-8 py-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 active:scale-95">开启阅读之旅</button>
     </div>
 
     <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
       <div v-for="book in books" :key="book.id" class="relative group cursor-pointer" @click="emit('open-book', book.id)">
-        <div class="aspect-[3/4.2] glass-dark rounded-2xl overflow-hidden relative shadow-xl shadow-black/20 group-hover:shadow-blue-500/10 group-hover:-translate-y-2 transition-all duration-500 border border-white/5 group-hover:border-blue-500/30">
+        <div class="aspect-[3/4.2] glass-dark rounded-2xl overflow-hidden relative shadow-xl shadow-black/20 group-hover:shadow-blue-500/10 group-hover:-translate-y-2 transition-all duration-500 border border-white/5 group-hover:border-blue-500/30"
+             :class="{'ring-2 ring-amber-400/50': book.pinned}">
           <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10"></div>
+
+          <!-- Pin badge -->
+          <div v-if="book.pinned" class="absolute top-2 left-2 z-20 text-amber-400 text-xs font-bold bg-black/40 backdrop-blur-md rounded-lg px-2 py-0.5">📌 置顶</div>
 
           <!-- Cover image or default icon -->
           <img v-if="book.cover_path" :src="book.cover_path" class="w-full h-full object-cover" alt="封面" @error="(e: Event) => (e.target as HTMLImageElement).style.display='none'" />
@@ -116,10 +141,17 @@ onMounted(() => fetchBooks())
 
           <!-- Actions -->
           <div class="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-20">
-            <button @click.stop="setCover(book.id)" class="p-2 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white rounded-xl backdrop-blur-md" title="设置封面">
+            <button @click.stop="togglePin(book)" class="p-2 hover:bg-amber-500 rounded-xl backdrop-blur-md transition-all"
+                    :class="book.pinned ? 'bg-amber-500/40 text-amber-300' : 'bg-white/10 text-white/60 hover:text-white'" :title="book.pinned ? '取消置顶' : '置顶'">
+              <span class="text-sm">📌</span>
+            </button>
+            <button @click.stop="setCover(book.id)" class="p-2 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white rounded-xl backdrop-blur-md transition-all" title="设置封面">
               <span class="text-sm">🖼️</span>
             </button>
-            <button @click.stop="deleteBook(book.id)" class="p-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-xl backdrop-blur-md" title="删除">
+            <button v-if="book.cover_path" @click.stop="removeCover(book.id)" class="p-2 bg-slate-500/20 hover:bg-slate-500 text-slate-400 hover:text-white rounded-xl backdrop-blur-md transition-all" title="取消封面">
+              <span class="text-sm">✕</span>
+            </button>
+            <button @click.stop="deleteBook(book.id)" class="p-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-xl backdrop-blur-md transition-all" title="删除">
               <span class="text-sm">🗑️</span>
             </button>
           </div>
