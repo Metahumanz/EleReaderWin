@@ -25,6 +25,14 @@ export interface ElectronAPI {
   font: {
     getSystemFonts: () => Promise<string[]>
   }
+  updater: {
+    check: () => Promise<boolean>
+    install: () => Promise<void>
+    onStatus: (cb: (data: { status: string; version?: string; percent?: number; message?: string }) => void) => void
+  }
+  app: {
+    getVersion: () => Promise<string>
+  }
 }
 
 declare global {

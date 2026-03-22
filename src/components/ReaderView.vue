@@ -51,7 +51,11 @@ let flipLock = false
 const fetchBook = async () => {
   try {
     const r = await window.electronAPI.db.query('SELECT * FROM books WHERE id = ?', [props.bookId])
-    if (Array.isArray(r) && r.length > 0) { book.value = r[0] as Book; currentChapterIndex.value = book.value.progress_index || 0 }
+    if (Array.isArray(r) && r.length > 0) {
+      book.value = r[0] as Book
+      currentChapterIndex.value = book.value.progress_index || 0
+      currentPage.value = book.value.progress_offset || 0
+    }
   } catch (e) { console.error(e) }
 }
 const fetchChapters = async () => {
@@ -126,8 +130,8 @@ const prevPageOffset = computed(() => {
 const saveProgress = async () => {
   if (!book.value) return
   try {
-    await window.electronAPI.db.query('UPDATE books SET progress_index = ?, last_read = ? WHERE id = ?',
-      [currentChapterIndex.value, new Date().toISOString(), props.bookId])
+    await window.electronAPI.db.query('UPDATE books SET progress_index = ?, progress_offset = ?, last_read = ? WHERE id = ?',
+      [currentChapterIndex.value, currentPage.value, new Date().toISOString(), props.bookId])
   } catch (e) { console.error(e) }
 }
 

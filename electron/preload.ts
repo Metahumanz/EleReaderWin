@@ -18,5 +18,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   font: {
     getSystemFonts: () => ipcRenderer.invoke('font:getSystemFonts')
+  },
+  updater: {
+    check: () => ipcRenderer.invoke('updater:check'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    onStatus: (cb: (data: any) => void) => {
+      ipcRenderer.on('updater:status', (_, data) => cb(data))
+    }
+  },
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:getVersion')
   }
 })
