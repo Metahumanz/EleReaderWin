@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
+import { ref, onMounted, watch, computed, onUnmounted, nextTick } from 'vue'
 
 interface Chapter {
   id: number
@@ -46,6 +46,7 @@ const systemFonts = ref<string[]>([])
 const currentPage = ref(0)
 const totalPages = ref(1)
 const contentRef = ref<HTMLElement | null>(null)
+const containerRef = ref<HTMLElement | null>(null)
 
 const fetchBook = async () => {
   try {
@@ -79,12 +80,12 @@ const loadSettings = async () => {
     const result = await window.electronAPI.db.query('SELECT * FROM settings')
     if (Array.isArray(result)) {
       result.forEach(s => {
-        if (s.key === 'reader_fontSize') fontSize.value = parseInt(s.value)
-        if (s.key === 'reader_lineHeight') lineHeight.value = parseFloat(s.value)
-        if (s.key === 'reader_letterSpacing') letterSpacing.value = parseFloat(s.value)
-        if (s.key === 'reader_marginX') marginX.value = parseInt(s.value)
-        if (s.key === 'reader_marginY') marginY.value = parseInt(s.value)
-        if (s.key === 'reader_fontFamily') fontFamily.value = s.value
+        if (s.key === 'reader_fontSize') fontSize.value = parseInt(s.value) || 20
+        if (s.key === 'reader_lineHeight') lineHeight.value = parseFloat(s.value) || 1.8
+        if (s.key === 'reader_letterSpacing') letterSpacing.value = parseFloat(s.value) || 0
+        if (s.key === 'reader_marginX') marginX.value = parseInt(s.value) || 60
+        if (s.key === 'reader_marginY') marginY.value = parseInt(s.value) || 40
+        if (s.key === 'reader_fontFamily') fontFamily.value = s.value || 'system-ui'
       })
     }
     systemFonts.value = await window.electronAPI.font.getSystemFonts()
@@ -108,17 +109,15 @@ const updateStyling = () => {
 }
 
 const calculatePages = () => {
-  if (!contentRef.value) return
-  // Small delay to allow reflow
-  setTimeout(() => {
-    if (!contentRef.value) return
-    const scrollWidth = contentRef.value.scrollWidth
-    const clientWidth = contentRef.value.clientWidth
+  if (!contentRef.value || !containerRef.value) return
+  nextTick(() => {
+    const scrollWidth = contentRef.value!.scrollWidth
+    const clientWidth = containerRef.value!.clientWidth
     totalPages.value = Math.max(1, Math.ceil(scrollWidth / clientWidth))
     if (currentPage.value >= totalPages.value) {
       currentPage.value = totalPages.value - 1
     }
-  }, 100)
+  })
 }
 
 const saveProgress = async () => {
@@ -159,10 +158,9 @@ const prevPage = () => {
     currentPage.value--
   } else if (currentChapterIndex.value > 0) {
     prevChapter()
-    // Go to last page of prev chapter
-    setTimeout(() => {
+    nextTick(() => {
       currentPage.value = totalPages.value - 1
-    }, 150)
+    })
   }
 }
 
@@ -216,7 +214,7 @@ onMounted(async () => {
   await fetchBook()
   await fetchChapters()
   loading.value = false
-  calculatePages()
+  setTimeout(calculatePages, 200)
   window.addEventListener('resize', calculatePages)
 })
 
@@ -226,7 +224,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 overflow-hidden select-none flex flex-col font-sans transition-all duration-500" @wheel="handleWheel">
+  <div class="fixed inset-0 overflow-hidden select-none flex flex-col transition-all duration-500" @wheel="handleWheel">
     <div v-if="loading" class="flex-1 flex items-center justify-center glass-dark">
       <div class="flex flex-col items-center gap-4">
         <div class="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
@@ -237,24 +235,24 @@ onUnmounted(() => {
     <template v-else>
       <!-- Content Layer -->
       <div 
-        class="flex-1 relative cursor-pointer active:scale-[0.995] transition-transform duration-300"
+        class="flex-1 relative cursor-pointer active:scale-[0.998] transition-all duration-300"
         @click="handleInteraction"
       >
         <div 
-          ref="contentRef"
-          class="h-full px-[var(--mx)] py-[var(--my)]"
+          ref="containerRef"
+          class="h-full overflow-hidden"
           :style="{
-            '--mx': marginX + 'px',
-            '--my': marginY + 'px',
-            columnWidth: '100vw',
-            columnGap: 'calc(var(--mx) * 2)',
-            columnFill: 'auto'
+            padding: `${marginY}px ${marginX}px`
           }"
         >
           <div 
-            class="h-full transition-transform duration-500 ease-out"
+            ref="contentRef"
+            class="h-full transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1)"
             :style="{ 
-              transform: `translateX(calc(-1 * ${currentPage} * (100vw)))`,
+              transform: `translateX(calc(-1 * ${currentPage} * (100% + ${marginX * 2}px)))`,
+              columnWidth: 'calc(100vw - ' + (marginX * 2) + 'px)',
+              columnGap: (marginX * 2) + 'px',
+              columnFill: 'auto',
               fontFamily: fontFamily,
               fontSize: fontSize + 'px',
               lineHeight: lineHeight,
@@ -262,21 +260,21 @@ onUnmounted(() => {
             }"
           >
             <div class="prose prose-invert max-w-none prose-p:mb-[0.8em]">
-              <h2 class="text-3xl font-bold mb-8 opacity-80" :style="{ fontSize: (fontSize * 1.5) + 'px' }">
+              <h2 class="text-3xl font-bold mb-8 opacity-80" :style="{ fontSize: (fontSize * 1.6) + 'px' }">
                 {{ chapters[currentChapterIndex]?.title }}
               </h2>
-              <div v-html="chapters[currentChapterIndex]?.body"></div>
+              <div v-html="chapters[currentChapterIndex]?.body" class="reader-content"></div>
             </div>
           </div>
         </div>
 
         <!-- HUD: Bottom overlays when menu is hidden -->
         <Transition name="fade">
-          <div v-if="!showMenu" class="absolute bottom-6 left-10 right-10 flex justify-between items-end pointer-events-none opacity-40 group-hover:opacity-80 transition-opacity">
-            <div class="text-xs font-medium">
+          <div v-if="!showMenu" class="absolute bottom-6 left-12 right-12 flex justify-between items-end pointer-events-none opacity-60 transition-opacity">
+            <div class="text-[11px] font-bold tracking-tight bg-slate-900/40 backdrop-blur-sm px-3 py-1 rounded-full border border-white/5">
               {{ currentPage === 0 ? book?.title : chapters[currentChapterIndex]?.title }}
             </div>
-            <div class="text-xs font-mono">
+            <div class="text-[11px] font-mono font-bold bg-slate-900/40 backdrop-blur-sm px-3 py-1 rounded-full border border-white/5">
               {{ progressPercent }}%
             </div>
           </div>
@@ -289,49 +287,49 @@ onUnmounted(() => {
           <button @click="showMenu = false" class="p-2 hover:bg-white/10 rounded-xl transition-all">
             <span class="text-xl">✕</span>
           </button>
-          <div class="ml-4 font-bold truncate max-w-[40%] opacity-80">{{ book?.title }}</div>
+          <div class="ml-4 font-bold truncate max-w-[40%] text-slate-200">{{ book?.title }}</div>
           
           <div class="ml-auto flex items-center gap-3">
             <button 
               @click="toggleImmersiveMode" 
-              class="px-3 py-1.5 glass rounded-xl text-xs font-bold hover:bg-blue-500/20 transition-all border-none"
+              class="px-4 py-1.5 glass rounded-xl text-xs font-bold hover:bg-blue-500/20 transition-all border-none"
             >
-              {{ isImmersive ? '退出沉浸' : '沉浸模式' }}
+              {{ isImmersive ? '退出全屏' : '全屏模式' }}
             </button>
             <button 
               @click="showStyling = !showStyling" 
               class="p-2.5 hover:bg-white/10 rounded-xl transition-all"
-              :class="{ 'bg-blue-500/20 text-blue-400': showStyling }"
+              :class="{ 'bg-blue-500 text-white shadow-lg shadow-blue-500/30': showStyling }"
             >
-              <span>Aa</span>
+              <span class="font-bold">Aa</span>
             </button>
           </div>
         </div>
       </Transition>
 
       <Transition name="fade">
-        <div v-if="showMenu" class="absolute inset-x-0 bottom-0 py-6 px-10 glass-dark border-t border-white/5 z-50">
-          <div class="max-w-4xl mx-auto space-y-6">
-            <!-- Progress Slider -->
-            <div class="flex items-center gap-6">
+        <div v-if="showMenu" class="absolute inset-x-0 bottom-0 py-8 px-12 glass-dark border-t border-white/5 z-50">
+          <div class="max-w-4xl mx-auto space-y-8">
+            <!-- Progress Control -->
+            <div class="flex items-center gap-8">
               <button 
                 @click="prevChapter" 
                 :disabled="currentChapterIndex === 0"
-                class="p-3 glass rounded-2xl disabled:opacity-30 hover:bg-white/10"
+                class="w-12 h-12 glass rounded-2xl flex items-center justify-center disabled:opacity-20 hover:bg-blue-500/20 transition-all active:scale-90"
               >
-                ⏮️
+                <span class="text-xl">⏮</span>
               </button>
               
-              <div class="flex-1 relative group">
+              <div class="flex-1 relative group py-2">
                 <input 
                   type="range" 
                   min="0" 
                   max="100" 
                   :value="progressPercent"
-                  @change="handleSliderChange"
-                  class="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-500"
+                  @input="handleSliderChange"
+                  class="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-500"
                 >
-                <div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-mono opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-mono opacity-0 group-hover:opacity-100 transition-opacity bg-blue-500 px-2 py-0.5 rounded text-white font-bold shadow-lg">
                   {{ progressPercent }}%
                 </div>
               </div>
@@ -339,15 +337,16 @@ onUnmounted(() => {
               <button 
                 @click="nextChapter" 
                 :disabled="currentChapterIndex === chapters.length - 1"
-                class="p-3 glass rounded-2xl disabled:opacity-30 hover:bg-white/10"
+                class="w-12 h-12 glass rounded-2xl flex items-center justify-center disabled:opacity-20 hover:bg-blue-500/20 transition-all active:scale-90"
               >
-                ⏭️
+                <span class="text-xl">⏭</span>
               </button>
             </div>
 
-            <div class="flex justify-between items-center text-xs text-slate-400 font-medium">
-              <span>第 {{ currentChapterIndex + 1 }} 章 : {{ chapters[currentChapterIndex]?.title }}</span>
-              <span>{{ currentPage + 1 }} / {{ totalPages }} 页</span>
+            <div class="flex justify-between items-center text-xs text-slate-400 font-bold uppercase tracking-widest">
+              <span class="bg-white/5 px-2 py-1 rounded">第 {{ currentChapterIndex + 1 }} 章</span>
+              <span class="text-blue-400">「 {{ chapters[currentChapterIndex]?.title }} 」</span>
+              <span class="bg-white/5 px-2 py-1 rounded">{{ currentPage + 1 }} / {{ totalPages }} 页</span>
             </div>
           </div>
         </div>
@@ -355,17 +354,20 @@ onUnmounted(() => {
 
       <!-- Advanced Styling Panel -->
       <Transition name="fade">
-        <div v-if="showStyling && showMenu" class="absolute right-6 bottom-32 w-80 glass-dark rounded-3xl p-6 border border-white/10 z-[60] shadow-2xl">
-          <h3 class="text-sm font-bold mb-6 opacity-60 uppercase tracking-widest">排版设置</h3>
+        <div v-if="showStyling && showMenu" class="absolute right-8 bottom-36 w-[340px] glass-dark rounded-3xl p-8 border border-white/10 z-[60] shadow-2xl space-y-8">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-black opacity-40 uppercase tracking-[0.2em]">排版实验室</h3>
+            <button @click="showStyling = false" class="text-slate-500 hover:text-white transition-colors">✕</button>
+          </div>
           
-          <div class="space-y-6">
-            <!-- Font Family -->
-            <div>
-              <label class="text-[10px] opacity-40 block mb-2 font-bold">字体库</label>
+          <div class="space-y-7">
+            <!-- Font Selection -->
+            <div class="space-y-3">
+              <label class="text-[10px] opacity-40 block font-black uppercase tracking-widest">字体艺术</label>
               <select 
                 v-model="fontFamily" 
                 @change="updateStyling"
-                class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500/50"
+                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all hover:bg-white/10"
               >
                 <option value="system-ui">系统默认 (Sans)</option>
                 <option value="serif">宋体 / Serif</option>
@@ -373,46 +375,52 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- Font Size -->
-            <div class="flex items-center justify-between gap-4">
-              <span class="text-xs opacity-60">字号</span>
-              <div class="flex items-center gap-3">
-                <button @click="fontSize > 12 && (fontSize--, updateStyling())" class="w-8 h-8 glass rounded-lg">-</button>
-                <span class="w-8 text-center text-sm font-mono">{{ fontSize }}</span>
-                <button @click="fontSize < 48 && (fontSize++, updateStyling())" class="w-8 h-8 glass rounded-lg">+</button>
+            <!-- Stylers: Slider + Input Pair -->
+            <div v-for="item in [
+              { label: '文字大小', key: 'fontSize', min: 12, max: 64, step: 1, unit: 'px' },
+              { label: '行间距', key: 'lineHeight', min: 1.0, max: 4.0, step: 0.1, unit: '' },
+              { label: '字间距', key: 'letterSpacing', min: -0.1, max: 1.0, step: 0.01, unit: 'em' }
+            ]" :key="item.key" class="space-y-3">
+              <div class="flex justify-between items-center">
+                <label class="text-[10px] opacity-40 font-black uppercase tracking-widest">{{ item.label }}</label>
+                <div class="flex items-center gap-2">
+                  <input 
+                    type="number" 
+                    v-model="($data as any)[item.key]" 
+                    @change="updateStyling"
+                    class="w-14 bg-white/5 border border-white/10 rounded-lg py-1 px-2 text-center text-xs font-mono outline-none focus:border-blue-500"
+                  >
+                  <span class="text-[10px] opacity-30 font-mono">{{ item.unit }}</span>
+                </div>
               </div>
+              <input 
+                type="range" :min="item.min" :max="item.max" :step="item.step" 
+                v-model.number="($data as any)[item.key]" 
+                @input="updateStyling"
+                class="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
+              >
             </div>
 
-            <!-- Line Height -->
-            <div class="flex items-center justify-between gap-4">
-              <span class="text-xs opacity-60">行间距</span>
-              <div class="flex items-center gap-3">
-                <button @click="lineHeight > 1 && (lineHeight -= 0.1, updateStyling())" class="w-8 h-8 glass rounded-lg">-</button>
-                <span class="w-8 text-center text-sm font-mono">{{ lineHeight.toFixed(1) }}</span>
-                <button @click="lineHeight < 4 && (lineHeight += 0.1, updateStyling())" class="w-8 h-8 glass rounded-lg">+</button>
+            <!-- Margins: Slider + Input -->
+            <div v-for="item in [
+              { label: '左右边距', key: 'marginX', min: 0, max: 200, step: 1 },
+              { label: '上下边距', key: 'marginY', min: 0, max: 150, step: 1 }
+            ]" :key="item.key" class="space-y-3">
+              <div class="flex justify-between items-center">
+                <label class="text-[10px] opacity-40 font-black uppercase tracking-widest">{{ item.label }}</label>
+                <input 
+                  type="number" 
+                  v-model="($data as any)[item.key]" 
+                  @change="updateStyling"
+                  class="w-14 bg-white/5 border border-white/10 rounded-lg py-1 px-2 text-center text-xs font-mono outline-none"
+                >
               </div>
-            </div>
-
-            <!-- Letter Spacing -->
-            <div class="flex items-center justify-between gap-4">
-              <span class="text-xs opacity-60">字间距</span>
-              <div class="flex items-center gap-3">
-                <button @click="letterSpacing > -0.1 && (letterSpacing -= 0.05, updateStyling())" class="w-8 h-8 glass rounded-lg">-</button>
-                <span class="w-8 text-center text-sm font-mono">{{ letterSpacing.toFixed(2) }}</span>
-                <button @click="letterSpacing < 1 && (letterSpacing += 0.05, updateStyling())" class="w-8 h-8 glass rounded-lg">+</button>
-              </div>
-            </div>
-
-            <!-- Margins -->
-            <div class="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
-              <div>
-                <label class="text-[10px] opacity-40 block mb-1 font-bold">左右边距</label>
-                <input type="number" v-model.number="marginX" @change="updateStyling" class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm outline-none">
-              </div>
-              <div>
-                <label class="text-[10px] opacity-40 block mb-1 font-bold">上下边距</label>
-                <input type="number" v-model.number="marginY" @change="updateStyling" class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm outline-none">
-              </div>
+              <input 
+                type="range" :min="item.min" :max="item.max" :step="item.step" 
+                v-model.number="($data as any)[item.key]" 
+                @input="updateStyling"
+                class="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500"
+              >
             </div>
           </div>
         </div>
@@ -422,18 +430,18 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.prose {
-  height: calc(100vh - var(--my) * 2);
+.reader-content {
+  height: 100%;
 }
 
-/* Page Indicator Dots */
+/* Range input styling */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  @apply w-4 h-4 bg-white rounded-full shadow-lg border-2 border-blue-500 cursor-pointer;
+  @apply w-3.5 h-3.5 bg-white rounded-full shadow-lg border-2 border-blue-500 cursor-pointer hover:scale-125 transition-transform;
 }
 
 select option {
-  @apply bg-slate-900 text-white;
+  @apply bg-slate-900 text-white p-4;
 }
 
 .fade-element {
@@ -441,7 +449,12 @@ select option {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom Scrollbar (hidden but logic remains) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 </style>
