@@ -8,21 +8,7 @@ type View = 'bookshelf' | 'reader' | 'settings'
 
 const currentView = ref<View>('bookshelf')
 const selectedBookId = ref<number | null>(null)
-const bgImage = ref('')
 const isImmersive = ref(false)
-
-const loadUserSettings = async () => {
-  try {
-    const result = await window.electronAPI.db.query("SELECT value FROM settings WHERE key = 'bgImage'")
-    if (Array.isArray(result) && result.length > 0 && result[0].value) {
-      bgImage.value = result[0].value
-    } else {
-      bgImage.value = ''
-    }
-  } catch (e) {
-    console.error('Failed to load user settings:', e)
-  }
-}
 
 const openBook = (bookId: number) => {
   selectedBookId.value = bookId
@@ -45,30 +31,14 @@ const toggleImmersive = async (val: boolean) => {
   await window.electronAPI.win.setFullScreen(val)
 }
 
-const bgStyle = () => {
-  if (!bgImage.value) return {}
-  return {
-    backgroundImage: `url('${bgImage.value}')`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat'
-  }
-}
-
 onMounted(() => {
-  loadUserSettings()
+  // No global bg image needed — reader handles its own bg
 })
 </script>
 
 <template>
-  <div 
-    class="min-h-screen bg-slate-950 text-white selection:bg-blue-500/30 transition-all duration-500"
-    :style="bgStyle()"
-  >
-    <!-- Background Overlay for contrast -->
-    <div v-if="bgImage" class="fixed inset-0 bg-slate-950/50 pointer-events-none"></div>
-
-    <!-- Navigation -->
+  <div class="min-h-screen bg-slate-950 text-white selection:bg-blue-500/30 transition-all duration-500">
+    <!-- Navigation (hidden in reader) -->
     <nav 
       v-if="currentView !== 'reader'"
       class="fixed top-0 left-0 right-0 h-14 glass-dark flex items-center px-6 z-[100] transition-transform duration-300"
@@ -117,12 +87,13 @@ onMounted(() => {
           v-else-if="currentView === 'reader' && selectedBookId"
           :book-id="selectedBookId"
           @toggle-immersive="toggleImmersive"
+          @go-back="goBack"
           class="fade-element"
         />
         <SettingsView
           v-else-if="currentView === 'settings'"
           @back="goBack"
-          @refresh-settings="loadUserSettings"
+          @refresh-settings="() => {}"
           class="fade-element"
         />
       </Transition>
