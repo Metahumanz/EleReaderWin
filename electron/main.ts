@@ -305,9 +305,9 @@ ipcMain.handle('font:getSystemFonts', async () => {
   
   const { execSync } = require('child_process')
   try {
-    const cmd = '[System.Drawing.Text.InstalledFontCollection]::new().Families.Name'
-    const output = execSync(`powershell -command "${cmd}"`, { encoding: 'utf8' })
-    return output.split(/\r?\n/).filter((f: string) => f.trim())
+    const cmd = 'Add-Type -AssemblyName System.Drawing; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }'
+    const output = execSync(`powershell -command "${cmd}"`, { encoding: 'utf8', timeout: 15000 })
+    return output.split(/\r?\n/).filter((f: string) => f.trim()).sort()
   } catch (e) {
     console.error('Failed to get fonts:', e)
     return []
