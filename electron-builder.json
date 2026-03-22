@@ -18,7 +18,8 @@
   "publish": {
     "provider": "github",
     "owner": "Metahumanz",
-    "repo": "EleReaderWin"
+    "repo": "EleReaderWin",
+    "releaseType": "release"
   },
   "artifactName": "${productName}-${version}-Setup.${ext}",
   "win": {

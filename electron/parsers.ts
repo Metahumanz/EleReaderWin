@@ -1,6 +1,8 @@
 import * as fs from 'fs'
 import * as iconv from 'iconv-lite'
 import * as jschardet from 'jschardet'
+import AdmZip from 'adm-zip'
+import { dirname, resolve } from 'path'
 
 export interface Chapter {
   title: string
@@ -58,7 +60,6 @@ export function parseTxt(filePath: string): Chapter[] {
 
     const chunk = content.slice(lastIndex, index).trim()
     
-    // First chapter handling: if there's text BEFORE the first match, it's the prologue
     if (i === 0 && chunk.length > 0) {
       chapters.push({
         title: '序章',
@@ -91,60 +92,126 @@ export function parseTxt(filePath: string): Chapter[] {
   return chapters
 }
 
-export async function parseEpub(filePath: string): Promise<Chapter[]> {
-  const epubModule = await import('epubjs')
-  const Epub = typeof epubModule === 'function' ? epubModule : (epubModule as any).default
-  if (typeof Epub !== 'function') {
-    throw new Error('Failed to import epubjs: default export is not a function')
+// ---- EPUB parser using adm-zip (no browser deps) ----
+
+function stripHtmlTags(html: string): string {
+  return html.replace(/<[^>]+>/g, '').trim()
+}
+
+function extractBodyContent(html: string): string {
+  // Extract content inside <body>...</body>
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+  if (bodyMatch) return bodyMatch[1].trim()
+  return html
+}
+
+function extractTitle(html: string): string {
+  // Try <title>, then <h1>, then <h2>, then <h3>
+  for (const tag of ['title', 'h1', 'h2', 'h3']) {
+    const m = html.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))
+    if (m) {
+      const t = stripHtmlTags(m[1]).trim()
+      if (t) return t
+    }
   }
-  const book = Epub(filePath)
+  return ''
+}
 
-  await book.ready
+export async function parseEpub(filePath: string): Promise<Chapter[]> {
+  const zip = new AdmZip(filePath)
+  const entries = zip.getEntries()
 
-  const toc = book.navigation.toc
-  const chapters: Chapter[] = []
+  // 1. Find container.xml -> rootfile path
+  const containerEntry = entries.find(e => e.entryName.toLowerCase() === 'meta-inf/container.xml')
+  if (!containerEntry) throw new Error('Invalid EPUB: no META-INF/container.xml')
 
-  for (let i = 0; i < toc.length; i++) {
-    const item = toc[i]
-    try {
-      const spineItem = book.spine.get(item.href)
-      if (!spineItem) continue
+  const containerXml = containerEntry.getData().toString('utf8')
+  const rootFileMatch = containerXml.match(/full-path="([^"]+)"/)
+  if (!rootFileMatch) throw new Error('Invalid EPUB: no rootfile path in container.xml')
 
-      const content = await spineItem.load(book.load.bind(book))
-      const text = content?.querySelector('body')?.innerHTML || ''
+  const rootFilePath = rootFileMatch[1]
+  const rootDir = dirname(rootFilePath)
 
-      chapters.push({
-        title: item.label.trim() || `第 ${i + 1} 章`,
-        body: text,
-        orderIndex: i
-      })
-    } catch (err) {
-      console.error(`Failed to load chapter: ${item.href}`, err)
+  // 2. Read content.opf (root file)
+  const opfEntry = entries.find(e => e.entryName === rootFilePath)
+  if (!opfEntry) throw new Error(`Invalid EPUB: rootfile ${rootFilePath} not found`)
+
+  const opfXml = opfEntry.getData().toString('utf8')
+
+  // 3. Parse manifest: <item id="..." href="..." media-type="..." />
+  const manifest: Map<string, string> = new Map()
+  const itemRegex = /<item\s+([^>]*?)\/?\s*>/gi
+  let itemMatch: RegExpExecArray | null
+  while ((itemMatch = itemRegex.exec(opfXml)) !== null) {
+    const attrs = itemMatch[1]
+    const idM = attrs.match(/id="([^"]+)"/)
+    const hrefM = attrs.match(/href="([^"]+)"/)
+    if (idM && hrefM) {
+      manifest.set(idM[1], hrefM[1])
     }
   }
 
-  if (chapters.length === 0) {
-    const sections = book.spine.items
-    for (let i = 0; i < sections.length; i++) {
-      try {
-        const section = sections[i]
-        const content = await section.load(book.load.bind(book))
-        const text = content?.querySelector('body')?.innerHTML || ''
+  // 4. Parse spine: <itemref idref="..." />
+  const spineIds: string[] = []
+  const spineSection = opfXml.match(/<spine[^>]*>([\s\S]*?)<\/spine>/i)
+  if (spineSection) {
+    const itemrefRegex = /idref="([^"]+)"/g
+    let spineMatch: RegExpExecArray | null
+    while ((spineMatch = itemrefRegex.exec(spineSection[1])) !== null) {
+      spineIds.push(spineMatch[1])
+    }
+  }
 
-        if (text.trim().length > 0) {
-          chapters.push({
-            title: `第 ${i + 1} 章`,
-            body: text,
-            orderIndex: i
-          })
-        }
-      } catch (err) {
-        console.error(`Failed to load spine item ${i}`, err)
+  // 5. Parse TOC for titles (try toc.ncx)
+  const tocTitles: Map<string, string> = new Map()
+  // Find NCX file from manifest
+  const ncxId = Array.from(manifest.entries()).find(([, href]) => href.endsWith('.ncx'))?.[0]
+  if (ncxId) {
+    const ncxHref = manifest.get(ncxId)!
+    const ncxPath = rootDir !== '.' ? `${rootDir}/${ncxHref}` : ncxHref
+    const ncxEntry = entries.find(e => e.entryName === ncxPath)
+    if (ncxEntry) {
+      const ncxXml = ncxEntry.getData().toString('utf8')
+      // Parse navPoints: <navPoint> <navLabel><text>Title</text></navLabel> <content src="file.xhtml"/> </navPoint>
+      const navPointRegex = /<navPoint[^>]*>[\s\S]*?<text>([\s\S]*?)<\/text>[\s\S]*?<content\s+src="([^"]+)"[\s\S]*?<\/navPoint>/gi
+      let navMatch: RegExpExecArray | null
+      while ((navMatch = navPointRegex.exec(ncxXml)) !== null) {
+        const title = stripHtmlTags(navMatch[1]).trim()
+        const src = navMatch[2].split('#')[0] // Remove fragment
+        if (title) tocTitles.set(src, title)
       }
     }
   }
 
-  book.destroy()
+  // 6. Read each spine item
+  const chapters: Chapter[] = []
+  for (let i = 0; i < spineIds.length; i++) {
+    const id = spineIds[i]
+    const href = manifest.get(id)
+    if (!href) continue
+
+    const fullPath = rootDir !== '.' ? `${rootDir}/${href}` : href
+    const entry = entries.find(e => e.entryName === fullPath || e.entryName === decodeURIComponent(fullPath))
+    if (!entry) continue
+
+    const html = entry.getData().toString('utf8')
+    const bodyContent = extractBodyContent(html)
+    if (!bodyContent || stripHtmlTags(bodyContent).length === 0) continue
+
+    // Try to get title from TOC, then from HTML content
+    let title = tocTitles.get(href) || tocTitles.get(decodeURIComponent(href)) || extractTitle(html)
+    if (!title) title = `第 ${chapters.length + 1} 章`
+
+    chapters.push({
+      title: title,
+      body: bodyContent,
+      orderIndex: chapters.length
+    })
+  }
+
+  if (chapters.length === 0) {
+    throw new Error('EPUB parsing failed: no readable chapters found')
+  }
 
   return chapters
 }
