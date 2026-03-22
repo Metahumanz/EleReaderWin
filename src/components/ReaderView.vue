@@ -150,7 +150,7 @@ const nextChapterData = computed(() => { const i = currentChapterIndex.value + 1
 const slideToNextChapter = () => {
   if (flipLock || currentChapterIndex.value >= chapters.value.length - 1) return
   flipLock = true
-  suppressAnim.value = true // prevent translateX animation on current content
+  suppressAnim.value = true
   carouselSliding.value = true
   carouselPos.value = 1
   setTimeout(() => {
@@ -159,7 +159,7 @@ const slideToNextChapter = () => {
     currentPage.value = 0
     carouselPos.value = 0
     saveProgress()
-    nextTick(() => { setTimeout(() => { calculatePages(); suppressAnim.value = false; flipLock = false }, 100) })
+    nextTick(() => { requestAnimationFrame(() => { calculatePages(); requestAnimationFrame(() => { suppressAnim.value = false; flipLock = false }) }) })
   }, 380)
 }
 
@@ -173,14 +173,13 @@ const slideToPrevChapter = () => {
     carouselSliding.value = false
     currentChapterIndex.value--
     carouselPos.value = 0
-    saveProgress()
     nextTick(() => {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         calculatePages()
         currentPage.value = Math.max(0, totalPages.value - 1)
-        suppressAnim.value = false
-        flipLock = false
-      }, 100)
+        saveProgress()
+        requestAnimationFrame(() => { suppressAnim.value = false; flipLock = false })
+      })
     })
   }, 380)
 }
@@ -191,7 +190,7 @@ const goToChapter = (idx: number, keepMenu = false) => {
     currentChapterIndex.value = idx
     currentPage.value = 0
     saveProgress()
-    nextTick(() => { setTimeout(() => { calculatePages(); suppressAnim.value = false }, 100) })
+    nextTick(() => { requestAnimationFrame(() => { calculatePages(); requestAnimationFrame(() => { suppressAnim.value = false }) }) })
   }
   if (!keepMenu) closeAll()
 }
@@ -199,19 +198,19 @@ const goToChapter = (idx: number, keepMenu = false) => {
 // ---- Page navigation ----
 const doPageFlip = (dir: 'left' | 'right', action: () => void) => {
   if (flipMode.value === 'cover') {
-    // Cover mode: animate clip-path
+    // Cover mode: opaque page slides across, hiding the snap
     flipLock = true
-    coverDir.value = dir === 'left' ? 'cover-left' : 'cover-right'
-    // Change page immediately (content snaps under the cover animation)
     suppressAnim.value = true
-    action()
+    coverDir.value = dir === 'left' ? 'cover-left' : 'cover-right'
+    // Content snaps to new page immediately (hidden by overlay)
+    requestAnimationFrame(() => { action() })
     setTimeout(() => {
       suppressAnim.value = false
       coverDir.value = ''
       flipLock = false
-    }, 350)
+    }, 380)
   } else {
-    // Slide mode: just change the page, CSS transition handles it
+    // Slide mode: CSS transition handles it
     action()
   }
 }
@@ -442,17 +441,26 @@ onUnmounted(() => {
 .spinner { width:40px; height:40px; border:2px solid rgba(59,130,246,0.2); border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg) } }
 
-/* Cover overlay */
-.cover-overlay { position:absolute; inset:0; z-index:5; pointer-events:none; }
-.cover-overlay.cover-left { animation: coverLeft 0.35s ease-out forwards; }
-.cover-overlay.cover-right { animation: coverRight 0.35s ease-out forwards; }
-@keyframes coverLeft {
-  0%   { clip-path: inset(0 0 0 100%); background: linear-gradient(to left, rgba(0,0,0,0.15), transparent 40%); }
-  100% { clip-path: inset(0); background: transparent; }
+/* Cover overlay — opaque page that slides across to cover/reveal */
+.cover-overlay {
+  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  background: #0f172a;
 }
-@keyframes coverRight {
-  0%   { clip-path: inset(0 100% 0 0); background: linear-gradient(to right, rgba(0,0,0,0.15), transparent 40%); }
-  100% { clip-path: inset(0); background: transparent; }
+.cover-overlay.cover-left {
+  animation: coverSlideL 0.38s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+  box-shadow: -8px 0 30px rgba(0,0,0,0.5);
+}
+.cover-overlay.cover-right {
+  animation: coverSlideR 0.38s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+  box-shadow: 8px 0 30px rgba(0,0,0,0.5);
+}
+@keyframes coverSlideL {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+@keyframes coverSlideR {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 /* Carousel */

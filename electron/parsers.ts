@@ -8,6 +8,14 @@ export interface Chapter {
   orderIndex: number
 }
 
+function linesToHtml(text: string): string {
+  return text
+    .split(/\n/)
+    .filter(l => l.trim())
+    .map(l => `<p>${l.trim()}</p>`)
+    .join('\n')
+}
+
 export function parseTxt(filePath: string): Chapter[] {
   const buffer = fs.readFileSync(filePath)
 
@@ -36,7 +44,7 @@ export function parseTxt(filePath: string): Chapter[] {
   if (matches.length === 0) {
     return [{
       title: '全文',
-      body: content.replace(/\n/g, '<br/>'),
+      body: linesToHtml(content),
       orderIndex: 0
     }]
   }
@@ -54,14 +62,14 @@ export function parseTxt(filePath: string): Chapter[] {
     if (i === 0 && chunk.length > 0) {
       chapters.push({
         title: '序章',
-        body: chunk.replace(/\n/g, '<br/>'),
+        body: linesToHtml(chunk),
         orderIndex: chapters.length
       })
     }
 
     chapters.push({
       title: title,
-      body: content.slice(index, nextIndex).replace(title, '').trim().replace(/\n/g, '<br/>'),
+      body: linesToHtml(content.slice(index, nextIndex).replace(title, '').trim()),
       orderIndex: chapters.length
     })
 
@@ -74,7 +82,7 @@ export function parseTxt(filePath: string): Chapter[] {
       const lastTitle = matches[matches.length - 1]?.title || '未完待续'
       chapters.push({
         title: lastTitle,
-        body: remaining.replace(lastTitle, '').trim().replace(/\n/g, '<br/>'),
+        body: linesToHtml(remaining.replace(lastTitle, '').trim()),
         orderIndex: chapters.length
       })
     }

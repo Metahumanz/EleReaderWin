@@ -13,6 +13,7 @@ const bgPreview = ref('')
 const appVersion = ref('')
 const updateStatus = ref('')
 const updateDetail = ref('')
+const updateReady = ref(false)
 
 const loadSettings = async () => {
   try {
@@ -54,7 +55,12 @@ const clearBgImage = async () => {
 const checkForUpdate = async () => {
   updateStatus.value = '正在检查...'
   updateDetail.value = ''
+  updateReady.value = false
   await window.electronAPI.updater.check()
+}
+
+const installNow = () => {
+  window.electronAPI.updater.install()
 }
 
 onMounted(async () => {
@@ -66,7 +72,7 @@ onMounted(async () => {
       case 'available': updateStatus.value = `🎉 发现新版本 v${data.version}`; updateDetail.value = '正在下载...'; break
       case 'up-to-date': updateStatus.value = '✅ 已是最新版本'; break
       case 'downloading': updateStatus.value = `⏬ 下载中 ${data.percent}%`; break
-      case 'downloaded': updateStatus.value = '✅ 下载完成'; updateDetail.value = '将在下次启动时自动安装'; break
+      case 'downloaded': updateStatus.value = '✅ 下载完成'; updateDetail.value = '可立即安装或等下次启动时自动安装'; updateReady.value = true; break
       case 'error': updateStatus.value = '❌ 更新失败'; updateDetail.value = data.message || ''; break
     }
   })
@@ -117,9 +123,10 @@ onMounted(async () => {
     <!-- Update -->
     <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
       <div class="flex items-center gap-3 mb-2"><span class="text-xl">🔄</span><h3 class="text-lg font-bold">软件更新</h3></div>
-      <p class="text-sm text-slate-400">应用会在启动时自动检查更新，下载完成后将在下次启动时安装。</p>
-      <div class="flex items-center gap-4">
+      <p class="text-sm text-slate-400">应用启动时自动检查更新。下载完成后可选择立即安装或下次启动时安装。</p>
+      <div class="flex items-center gap-4 flex-wrap">
         <button @click="checkForUpdate" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-blue-600/20">检查更新</button>
+        <button v-if="updateReady" @click="installNow" class="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-green-600/20">⬇ 立即安装</button>
         <div v-if="updateStatus">
           <p class="text-sm font-medium">{{ updateStatus }}</p>
           <p v-if="updateDetail" class="text-xs text-slate-400 mt-1">{{ updateDetail }}</p>
