@@ -12,6 +12,7 @@ interface Book { id: number; title: string }
 
 const bgImage = ref('')
 const bgPreview = ref('')
+const showKeyHints = ref(true)
 const appVersion = ref('')
 const updateStatus = ref('')
 const updateDetail = ref('')
@@ -29,6 +30,7 @@ const loadSettings = async () => {
     const settings = result as Setting[]
     for (const s of settings) {
       if (s.key === 'bgImage') { bgImage.value = s.value || ''; bgPreview.value = s.value || '' }
+      if (s.key === 'hideKeyHints') { showKeyHints.value = s.value !== 'true' }
     }
   } catch (e) { console.error(e) }
 }
@@ -52,6 +54,10 @@ const applyBgImage = async () => {
   bgImage.value = v; bgPreview.value = v
   await saveSetting('bgImage', v)
   emit('refresh-settings')
+}
+
+const toggleKeyHints = async () => {
+  await saveSetting('hideKeyHints', (!showKeyHints.value).toString())
 }
 
 const clearBgImage = async () => {
@@ -160,6 +166,19 @@ onMounted(async () => {
         <button @click="setAspectRatio(4/3)" class="glass px-4 py-3 rounded-xl hover:bg-blue-500/20 hover:border-blue-500/50 transition-all font-mono text-sm">4 : 3</button>
         <button @click="setAspectRatio(3/4)" class="glass px-4 py-3 rounded-xl hover:bg-blue-500/20 hover:border-blue-500/50 transition-all font-mono text-sm">3 : 4</button>
       </div>
+    </section>
+
+    <!-- UI & Helpers -->
+    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
+      <div class="flex items-center gap-3 mb-2"><span class="text-xl">⌨️</span><h3 class="text-lg font-bold">阅读助手</h3></div>
+      <label class="flex items-center gap-3 cursor-pointer select-none">
+        <input type="checkbox" v-model="showKeyHints" @change="toggleKeyHints" class="hidden" />
+        <div class="w-12 h-6 rounded-full transition-colors duration-300 relative border border-white/10" :class="showKeyHints ? 'bg-blue-600' : 'bg-white/5'">
+          <div class="absolute w-4 h-4 rounded-full bg-white top-1 transition-transform duration-300 shadow-sm" :class="!showKeyHints ? 'left-1' : 'translate-x-6 left-1'"></div>
+        </div>
+        <span class="text-slate-300 text-sm">显示快捷键与操作提示</span>
+      </label>
+      <p class="text-xs text-slate-500 mt-1 pl-[3.75rem]">开启后，进入阅读界面时将显示快捷键操作指南。</p>
     </section>
 
     <!-- Background -->

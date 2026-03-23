@@ -98,6 +98,10 @@ interface CustomTheme {
 }
 const customThemes = ref<CustomTheme[]>([])
 const newThemeName = ref('')
+const showKeyHints = ref(true)
+
+const closeKeyHints = () => { showKeyHints.value = false }
+const disableKeyHints = () => { showKeyHints.value = false; saveSetting('hideKeyHints', 'true') }
 
 const loadSettings = async () => {
   try {
@@ -117,6 +121,7 @@ const loadSettings = async () => {
         if (s.key === 'reader_flipMode') flipMode.value = (s.value === 'cover' ? 'cover' : 'slide')
         if (s.key === 'reader_pageMode') pageMode.value = (s.value === 'double' ? 'double' : 'single')
         if (s.key === 'reader_doublePageStep') doublePageStep.value = (parseInt(s.value) === 1 ? 1 : 2)
+        if (s.key === 'hideKeyHints') showKeyHints.value = (s.value !== 'true')
         if (s.key === 'custom_themes') {
           try { customThemes.value = JSON.parse(s.value) || [] } catch (_) {}
         }
@@ -590,6 +595,45 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- Key Hints Overlay -->
+      <Transition name="fade">
+        <div v-if="showKeyHints" class="absolute inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.stop>
+          <div class="glass-dark p-8 rounded-3xl w-full max-w-md shadow-2xl border border-white/10 animate-scale-up">
+            <h3 class="text-2xl font-bold mb-6 flex items-center gap-3"><span class="text-3xl">⌨️</span> 快捷键指南</h3>
+            <div class="space-y-4 mb-8">
+              <div class="flex items-center justify-between p-3 glass rounded-xl">
+                <span class="text-slate-300">上一页</span>
+                <div class="flex gap-1">
+                  <kbd class="px-2 py-1 bg-white/10 rounded-lg shadow-sm border border-white/5 text-sm font-mono">←</kbd>
+                  <kbd class="px-2 py-1 bg-white/10 rounded-lg shadow-sm border border-white/5 text-sm font-mono">A / W</kbd>
+                  <kbd class="px-2 py-1 bg-white/10 rounded-lg shadow-sm border border-white/5 text-sm font-mono">PgUp</kbd>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-3 glass rounded-xl">
+                <span class="text-slate-300">下一页</span>
+                <div class="flex gap-1">
+                  <kbd class="px-2 py-1 bg-white/10 rounded-lg shadow-sm border border-white/5 text-sm font-mono">→</kbd>
+                  <kbd class="px-2 py-1 bg-white/10 rounded-lg shadow-sm border border-white/5 text-sm font-mono">D / S</kbd>
+                  <kbd class="px-2 py-1 bg-white/10 rounded-lg shadow-sm border border-white/5 text-sm font-mono">PgDn</kbd>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-3 glass rounded-xl">
+                <span class="text-slate-300">退出全屏 / 关闭菜单</span>
+                <kbd class="px-2 py-1 bg-white/10 rounded-lg shadow-sm border border-white/5 text-sm font-mono">ESC</kbd>
+              </div>
+              <div class="flex items-center justify-between p-3 glass rounded-xl">
+                <span class="text-slate-300">鼠标操作</span>
+                <span class="text-xs text-slate-400">点击中间唤出菜单，两侧翻页</span>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <button @click="disableKeyHints" class="flex-1 py-3 px-4 glass-card rounded-xl text-sm font-medium hover:bg-white/10 transition-all border border-white/5">不再提示</button>
+              <button @click="closeKeyHints" class="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all">我知道了</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
 
       <!-- HUD -->
       <div v-if="!showMenu" class="hud">
