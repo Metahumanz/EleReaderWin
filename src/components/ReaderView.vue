@@ -594,7 +594,13 @@ onUnmounted(() => {
 
     <template v-else>
       <!-- Reveal animation overlay -->
-      <div v-if="showingCover" class="snapshot-layer" :class="sweepDir" v-html="snapshotHtml"></div>
+      <div v-if="showingCover" class="snapshot-layer" :class="sweepDir">
+        <div class="absolute inset-0 pointer-events-none transform-gpu origin-center" 
+             :style="[readerBgStyle, { filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none', transform: blurAmount > 0 ? 'scale(1.1)' : 'none' }]"
+             :class="{ 'bg-[#0f172a]': !bgImage }"></div>
+        <div v-if="bgImage && blurAmount > 0" class="absolute inset-0 pointer-events-none bg-black/40"></div>
+        <div class="absolute inset-0" v-html="snapshotHtml"></div>
+      </div>
       <div v-if="showingCover" class="sweep-line" :class="sweepDir"></div>
 
       <!-- Three-container carousel -->
