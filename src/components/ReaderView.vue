@@ -23,6 +23,7 @@ const showSearch = ref(false)
 const showRules = ref(false)
 const isImmersive = ref(false)
 const bgImage = ref('')
+const blurBackground = ref(false)
 
 // Styling
 const fontSize = ref(20)
@@ -122,6 +123,7 @@ const loadSettings = async () => {
         if (s.key === 'reader_pageMode') pageMode.value = (s.value === 'double' ? 'double' : 'single')
         if (s.key === 'reader_doublePageStep') doublePageStep.value = (parseInt(s.value) === 1 ? 1 : 2)
         if (s.key === 'hideKeyHints') showKeyHints.value = (s.value !== 'true')
+        if (s.key === 'reader_blurBackground') blurBackground.value = (s.value === 'true')
         if (s.key === 'custom_themes') {
           try { customThemes.value = JSON.parse(s.value) || [] } catch (_) {}
         }
@@ -142,7 +144,12 @@ const updateStyling = () => {
   saveSetting('reader_coverColor', coverColor.value)
   saveSetting('reader_pageMode', pageMode.value)
   saveSetting('reader_doublePageStep', doublePageStep.value)
+  saveSetting('reader_blurBackground', blurBackground.value)
   recalc()
+}
+const toggleBlur = () => {
+  blurBackground.value = !blurBackground.value
+  updateStyling()
 }
 const setFlipMode = (mode: 'slide' | 'cover') => {
   flipMode.value = mode
@@ -546,7 +553,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="reader-root" :style="readerBgStyle" @wheel="handleWheel" @click="handleClick">
+  <div class="reader-root" @wheel="handleWheel" @click="handleClick">
+    <!-- Separate background layer to allow blurring without blurring text -->
+    <div class="fixed inset-0 pointer-events-none transition-all duration-300" 
+         :style="readerBgStyle" 
+         :class="{ 'blur-xl scale-105': blurBackground && bgImage, 'bg-[#0f172a]': !bgImage }">
+    </div>
+    <!-- Darken overlay for better reading contrast -->
+    <div v-if="bgImage" class="fixed inset-0 pointer-events-none bg-black/40"></div>
+
     <div v-if="loading" class="load"><div class="spinner"></div><p>正在载入...</p></div>
 
     <template v-else>
@@ -665,6 +680,13 @@ onUnmounted(() => {
             <span>第 {{ currentChapterIndex+1 }}/{{ chapters.length }} 章</span>
             <span>「{{ currentChapterData?.title }}」</span>
             <span>第 {{ currentPage+1 }}/{{ totalPages }} 页</span>
+
+            <!-- Background Blur toggle -->
+            <button v-if="bgImage" @click="toggleBlur" class="ft-btn flex items-center gap-1 mx-2" :class="{ftActive: blurBackground}">
+              <span v-if="blurBackground">取消模糊</span>
+              <span v-else>背景模糊</span>
+            </button>
+
             <!-- Flip mode toggle -->
             <span class="flip-toggle">
               翻页:
@@ -807,7 +829,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.reader-root { position:fixed; inset:0; overflow:hidden; user-select:none; display:flex; flex-direction:column; background:#0f172a; color:white; color-scheme:only light; }
+.reader-root { position:fixed; inset:0; overflow:hidden; user-select:none; display:flex; flex-direction:column; color:white; color-scheme:only light; }
 .load { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; color:rgba(255,255,255,0.5); z-index:1; }
 .spinner { width:40px; height:40px; border:2px solid rgba(59,130,246,0.2); border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg) } }
