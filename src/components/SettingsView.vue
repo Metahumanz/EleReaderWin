@@ -13,6 +13,8 @@ interface Book { id: number; title: string }
 const bgImage = ref('')
 const bgPreview = ref('')
 const showKeyHints = ref(true)
+const nextKeys = ref<string[]>(['ArrowRight', 'PageDown', ' '])
+const prevKeys = ref<string[]>(['ArrowLeft', 'PageUp'])
 const appVersion = ref('')
 const updateStatus = ref('')
 const updateDetail = ref('')
@@ -31,6 +33,8 @@ const loadSettings = async () => {
     for (const s of settings) {
       if (s.key === 'bgImage') { bgImage.value = s.value || ''; bgPreview.value = s.value || '' }
       if (s.key === 'hideKeyHints') { showKeyHints.value = s.value !== 'true' }
+      if (s.key === 'reader_nextKeys') { try { nextKeys.value = JSON.parse(s.value) } catch (e){} }
+      if (s.key === 'reader_prevKeys') { try { prevKeys.value = JSON.parse(s.value) } catch (e){} }
     }
   } catch (e) { console.error(e) }
 }
@@ -58,6 +62,28 @@ const applyBgImage = async () => {
 
 const toggleKeyHints = async () => {
   await saveSetting('hideKeyHints', (!showKeyHints.value).toString())
+}
+
+const addNextKey = (e: KeyboardEvent) => {
+  if (!nextKeys.value.includes(e.key) && e.key.trim().length > 0 || e.key === ' ') {
+    nextKeys.value.push(e.key)
+    saveSetting('reader_nextKeys', JSON.stringify(nextKeys.value))
+  }
+}
+const removeNextKey = (k: string) => {
+  nextKeys.value = nextKeys.value.filter(x => x !== k)
+  saveSetting('reader_nextKeys', JSON.stringify(nextKeys.value))
+}
+
+const addPrevKey = (e: KeyboardEvent) => {
+  if (!prevKeys.value.includes(e.key) && e.key.trim().length > 0 || e.key === ' ') {
+    prevKeys.value.push(e.key)
+    saveSetting('reader_prevKeys', JSON.stringify(prevKeys.value))
+  }
+}
+const removePrevKey = (k: string) => {
+  prevKeys.value = prevKeys.value.filter(x => x !== k)
+  saveSetting('reader_prevKeys', JSON.stringify(prevKeys.value))
 }
 
 const clearBgImage = async () => {
@@ -181,6 +207,32 @@ onMounted(async () => {
       <p class="text-xs text-slate-500 mt-1 pl-[3.75rem]">开启后，进入阅读界面时将显示快捷键操作指南。</p>
     </section>
 
+    <!-- Key Bindings -->
+    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
+      <div class="flex items-center gap-3 mb-2"><span class="text-xl">⌨️</span><h3 class="text-lg font-bold">翻页快捷键</h3></div>
+      <p class="text-sm text-slate-400">点击并在输入框中按下您希望绑定的按键即可录入；点击已存在的按键进行移除。</p>
+      <div class="space-y-4">
+        <div class="flex-1">
+          <label class="block text-sm text-slate-400 mb-2">下一页 / 下一章</label>
+          <div class="flex items-center gap-2 flex-wrap mb-2">
+            <span v-for="k in nextKeys" :key="k" @click="removeNextKey(k)" class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-red-500/30 hover:text-red-300 font-mono text-sm cursor-pointer transition-colors" title="点击删除">
+              {{ k === ' ' ? 'Space' : k }} &times;
+            </span>
+          </div>
+          <input type="text" placeholder="在此处按下按键绑定..." @keydown.prevent="addNextKey" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+        </div>
+        <div class="flex-1">
+          <label class="block text-sm text-slate-400 mb-2">上一页 / 上一章</label>
+          <div class="flex items-center gap-2 flex-wrap mb-2">
+            <span v-for="k in prevKeys" :key="k" @click="removePrevKey(k)" class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-red-500/30 hover:text-red-300 font-mono text-sm cursor-pointer transition-colors" title="点击删除">
+              {{ k === ' ' ? 'Space' : k }} &times;
+            </span>
+          </div>
+          <input type="text" placeholder="在此处按下按键绑定..." @keydown.prevent="addPrevKey" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+        </div>
+      </div>
+    </section>
+
     <!-- Background -->
     <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
       <div class="flex items-center gap-3 mb-2"><span class="text-xl">🎨</span><h3 class="text-lg font-bold">阅读背景</h3></div>
@@ -290,5 +342,6 @@ section:nth-child(3) { animation-delay: 0.15s; }
 section:nth-child(4) { animation-delay: 0.2s; }
 section:nth-child(5) { animation-delay: 0.25s; }
 section:nth-child(6) { animation-delay: 0.3s; }
+section:nth-child(7) { animation-delay: 0.35s; }
 @keyframes slideIn { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
 </style>

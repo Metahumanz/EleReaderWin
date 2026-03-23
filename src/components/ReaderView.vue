@@ -60,8 +60,6 @@ const prevPageCount = ref(1)
 const tocListRef = ref<HTMLElement | null>(null)
 const suppressAnim = ref(false) // suppress translateX transition during chapter switch
 
-// Cover mode animation
-const coverDir = ref<'' | 'cover-left' | 'cover-right'>('')
 
 let flipLock = false
 
@@ -104,6 +102,17 @@ const customThemes = ref<CustomTheme[]>([])
 const newThemeName = ref('')
 const showKeyHints = ref(true)
 
+const nextKeys = ref<string[]>(['ArrowRight', 'PageDown', ' '])
+const prevKeys = ref<string[]>(['ArrowLeft', 'PageUp'])
+const showingCover = ref(false)
+const sweepDir = ref('left')
+const snapshotHtml = ref('')
+
+const textAlign = ref('left')
+const alignBottom = ref(false)
+const showCopyModal = ref(false)
+const selectedText = ref('')
+
 const closeKeyHints = () => { showKeyHints.value = false }
 const disableKeyHints = () => { showKeyHints.value = false; saveSetting('hideKeyHints', 'true') }
 
@@ -126,7 +135,11 @@ const loadSettings = async () => {
         if (s.key === 'reader_pageMode') pageMode.value = (s.value === 'double' ? 'double' : 'single')
         if (s.key === 'reader_doublePageStep') doublePageStep.value = (parseInt(s.value) === 1 ? 1 : 2)
         if (s.key === 'hideKeyHints') showKeyHints.value = (s.value !== 'true')
+        if (s.key === 'reader_nextKeys') { try { nextKeys.value = JSON.parse(s.value) } catch (_) {} }
+        if (s.key === 'reader_prevKeys') { try { prevKeys.value = JSON.parse(s.value) } catch (_) {} }
         if (s.key === 'reader_blurAmount') blurAmount.value = parseInt(s.value) || 0
+        if (s.key === 'reader_textAlign') textAlign.value = s.value === 'justify' ? 'justify' : 'left'
+        if (s.key === 'reader_alignBottom') alignBottom.value = s.value === 'true'
         if (s.key === 'custom_themes') {
           try { customThemes.value = JSON.parse(s.value) || [] } catch (_) {}
         }
@@ -148,6 +161,8 @@ const updateStyling = () => {
   saveSetting('reader_pageMode', pageMode.value)
   saveSetting('reader_doublePageStep', doublePageStep.value)
   saveSetting('reader_blurAmount', blurAmount.value)
+  saveSetting('reader_textAlign', textAlign.value)
+  saveSetting('reader_alignBottom', alignBottom.value ? 'true' : 'false')
   recalc()
 }
 const setFlipMode = (mode: 'slide' | 'cover') => {
@@ -302,8 +317,8 @@ const calcPrevPages = () => {
 }
 
 const pageOffset = computed(() => {
-  if (!containerRef.value) return '0px'
-  const pageWidth = pageMode.value === 'double' ? containerRef.value.clientWidth / 2 : containerRef.value.clientWidth
+  const cw = containerRef.value?.clientWidth || 0
+  const pageWidth = pageMode.value === 'double' ? cw / 2 : cw
   return `-${currentPage.value * pageWidth}px`
 })
 const prevPageOffset = computed(() => {
@@ -336,15 +351,17 @@ const slideToNextChapter = () => {
   suppressAnim.value = true
   
   if (flipMode.value === 'cover') {
-    coverDir.value = 'cover-left'
+    if (containerRef.value) snapshotHtml.value = containerRef.value.outerHTML
+    sweepDir.value = 'left'
+    showingCover.value = true
     requestAnimationFrame(() => {
       currentChapterIndex.value++
       currentPage.value = 0
       saveProgress()
     })
     setTimeout(() => {
-      nextTick(() => { calculatePages(); suppressAnim.value = false; coverDir.value = ''; flipLock = false })
-    }, 380)
+      nextTick(() => { calculatePages(); suppressAnim.value = false; showingCover.value = false; flipLock = false })
+    }, 450)
   } else {
     carouselSliding.value = true
     carouselPos.value = 1
@@ -372,12 +389,14 @@ const slideToPrevChapter = () => {
   }
 
   if (flipMode.value === 'cover') {
-    coverDir.value = 'cover-right'
+    if (containerRef.value) snapshotHtml.value = containerRef.value.outerHTML
+    sweepDir.value = 'right'
+    showingCover.value = true
     requestAnimationFrame(() => {
       currentChapterIndex.value--
       nextTick(setLastPage)
     })
-    setTimeout(() => { suppressAnim.value = false; coverDir.value = ''; flipLock = false }, 380)
+    setTimeout(() => { suppressAnim.value = false; showingCover.value = false; flipLock = false }, 450)
   } else {
     carouselSliding.value = true
     carouselPos.value = -1
@@ -404,17 +423,17 @@ const goToChapter = (idx: number, keepMenu = false) => {
 // ---- Page navigation ----
 const doPageFlip = (dir: 'left' | 'right', action: () => void) => {
   if (flipMode.value === 'cover') {
-    // Cover mode: opaque page slides across, hiding the snap
+    if (containerRef.value) snapshotHtml.value = containerRef.value.outerHTML
+    sweepDir.value = dir === 'left' ? 'left' : 'right'
+    showingCover.value = true
     flipLock = true
     suppressAnim.value = true
-    coverDir.value = dir === 'left' ? 'cover-left' : 'cover-right'
-    // Content snaps to new page immediately (hidden by overlay)
     requestAnimationFrame(() => { action() })
     setTimeout(() => {
+      showingCover.value = false
       suppressAnim.value = false
-      coverDir.value = ''
       flipLock = false
-    }, 380)
+    }, 450)
   } else {
     // Slide mode: CSS transition handles it
     action()
@@ -451,12 +470,27 @@ const closeAll = () => { showMenu.value = false; showStyling.value = false; show
 const handleClick = (e: MouseEvent) => {
   const t = e.target as HTMLElement
   if (t.closest('.m-top') || t.closest('.m-bot') || t.closest('.m-info') ||
-      t.closest('.sty-p') || t.closest('.toc-p') || t.closest('.search-p') || t.closest('.rules-p')) return
+      t.closest('.sty-p') || t.closest('.toc-p') || t.closest('.search-p') || t.closest('.rules-p') || t.closest('.copy-modal')) return
   if (showMenu.value) { closeAll(); return }
   const x = e.clientX, w = window.innerWidth
   if (x < w * 0.3) prevPage()
   else if (x > w * 0.7) nextPage()
   else showMenu.value = true
+}
+
+const handleContextMenu = (e: MouseEvent) => {
+  if (showMenu.value) return
+  const t = e.target as HTMLElement
+  const p = t.closest('p, h2, h3, div.ch-body')
+  if (p && p.textContent && p.textContent.trim().length > 0) {
+    selectedText.value = p.textContent.trim()
+    showCopyModal.value = true
+  }
+}
+
+const copyToClipboard = () => {
+  navigator.clipboard.writeText(selectedText.value)
+  showCopyModal.value = false
 }
 
 const handleWheel = (e: WheelEvent) => {
@@ -479,10 +513,8 @@ const handleKeydown = (e: KeyboardEvent) => {
     return
   }
   if (showMenu.value && k !== ' ' && c !== 'Space') return
-  if (k === 'ArrowRight' || k === 'd' || k === 'D' || c === 'Numpad6' || k === 'PageDown' ||
-      k === 'ArrowDown' || k === 's' || k === 'S' || c === 'Numpad2' || k === ' ' || c === 'Space') { e.preventDefault(); nextPage() }
-  else if (k === 'ArrowLeft' || k === 'a' || k === 'A' || c === 'Numpad4' || k === 'PageUp' ||
-           k === 'ArrowUp' || k === 'w' || k === 'W' || c === 'Numpad8') { e.preventDefault(); prevPage() }
+  if (nextKeys.value.includes(k) || nextKeys.value.includes(c)) { e.preventDefault(); nextPage() }
+  else if (prevKeys.value.includes(k) || prevKeys.value.includes(c)) { e.preventDefault(); prevPage() }
 }
 
 const toggleImmersiveMode = () => { isImmersive.value = !isImmersive.value; emit('toggle-immersive', isImmersive.value) }
@@ -505,17 +537,11 @@ const readerBgStyle = computed(() => {
   return { backgroundImage: `url('${bgImage.value}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
 })
 
-const coverOverlayStyle = computed(() => {
-  if (bgImage.value) {
-    return { backgroundImage: `url('${bgImage.value}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
-  }
-  return { backgroundColor: coverColor.value }
-})
-
 const textStyle = computed(() => ({
   fontFamily: fontFamily.value, fontSize: fontSize.value + 'px',
   lineHeight: String(lineHeight.value), letterSpacing: letterSpacing.value + 'em',
   fontWeight: String(fontWeight.value), color: fontColor.value,
+  textAlign: textAlign.value as any,
 }))
 
 const carouselTransform = computed(() => `translateX(${-100 + carouselPos.value * -100}vw)`)
@@ -555,7 +581,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="reader-root" @wheel="handleWheel" @click="handleClick">
+  <div class="reader-root" @wheel="handleWheel" @click="handleClick" @contextmenu.prevent="handleContextMenu">
     <!-- Separate background layer to allow blurring without blurring text -->
     <div class="fixed inset-0 pointer-events-none transition-all duration-300 transform-gpu origin-center" 
          :style="[readerBgStyle, { filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none', transform: blurAmount > 0 ? 'scale(1.1)' : 'none' }]"
@@ -567,19 +593,21 @@ onUnmounted(() => {
     <div v-if="loading" class="load"><div class="spinner"></div><p>正在载入...</p></div>
 
     <template v-else>
-      <!-- Cover animation overlay -->
-      <div v-if="coverDir" class="cover-overlay" :class="coverDir" :style="coverOverlayStyle"></div>
+      <!-- Reveal animation overlay -->
+      <div v-if="showingCover" class="snapshot-layer" :class="sweepDir" v-html="snapshotHtml"></div>
+      <div v-if="showingCover" class="sweep-line" :class="sweepDir"></div>
 
       <!-- Three-container carousel -->
       <div class="carousel" :class="{ sliding: carouselSliding }" :style="{ transform: carouselTransform }">
         <!-- PREV chapter (last page) -->
         <div class="slide">
-          <div ref="prevContainerRef" class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px` }">
+          <div ref="prevContainerRef" class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px`, justifyContent: alignBottom ? 'flex-end' : 'flex-start' }">
             <div ref="prevContentRef" class="pg-ct" :style="{
               ...textStyle,
               transform: `translateX(${prevPageOffset})`,
               columnWidth: pageMode === 'double' ? `calc(50vw - ${marginX * 2}px)` : `calc(100vw - ${marginX * 2}px)`,
               columnGap: `${marginX * 2}px`, columnFill: 'auto',
+              alignContent: alignBottom ? 'end' : 'start'
             }" v-if="prevChapterData">
               <h2 class="ch-title" :style="{ fontSize: (fontSize*1.4)+'px', color: fontColor }">{{ prevChapterData.title }}</h2>
               <div v-html="prevBody" class="ch-body"></div>
@@ -589,12 +617,13 @@ onUnmounted(() => {
 
         <!-- CURRENT chapter -->
         <div class="slide">
-          <div ref="containerRef" class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px` }">
+          <div ref="containerRef" class="pg-ctr" :style="{ padding: `${marginY}px ${marginX}px`, justifyContent: alignBottom ? 'flex-end' : 'flex-start' }">
             <div ref="contentRef" class="pg-ct" :class="{ 'pg-anim': !suppressAnim }" :style="{
               ...textStyle,
               transform: `translateX(${pageOffset})`,
               columnWidth: pageMode === 'double' ? `calc(50vw - ${marginX * 2}px)` : `calc(100vw - ${marginX * 2}px)`,
               columnGap: `${marginX * 2}px`, columnFill: 'auto',
+              alignContent: alignBottom ? 'end' : 'start'
             }">
               <h2 class="ch-title" :style="{ fontSize: (fontSize*1.4)+'px', color: fontColor }">{{ currentChapterData?.title }}</h2>
               <div v-html="currentBody" class="ch-body"></div>
@@ -783,6 +812,20 @@ onUnmounted(() => {
               <div class="sr"><label>上下边距</label><input type="range" min="0" max="150" step="1" v-model.number="marginY" @input="updateStyling" class="sl"><input type="number" v-model.number="marginY" @change="updateStyling" class="sn"><span class="su">px</span></div>
               <div class="sr"><label>翻页底色</label><input type="color" v-model="coverColor" @input="updateStyling" class="sc"><input type="text" v-model="coverColor" @change="updateStyling" class="sn w72"><small class="sw-note">*有背景图时自动适配</small></div>
               <div class="sr"><label>背景模糊</label><input type="range" min="0" max="40" step="1" v-model.number="blurAmount" @input="updateStyling" class="sl"><input type="number" v-model.number="blurAmount" @change="updateStyling" class="sn"><span class="su">px</span></div>
+              <div class="sr">
+                <label>文字对齐</label>
+                <div class="btn-group">
+                  <button @click="textAlign='left'; updateStyling()" :class="{active: textAlign==='left'}">靠左对齐</button>
+                  <button @click="textAlign='justify'; updateStyling()" :class="{active: textAlign==='justify'}">两端对齐</button>
+                </div>
+              </div>
+              <div class="sr">
+                <label>垂直对齐</label>
+                <div class="btn-group">
+                  <button @click="alignBottom=false; updateStyling()" :class="{active: !alignBottom}">常规（靠上）</button>
+                  <button @click="alignBottom=true; updateStyling()" :class="{active: alignBottom}">靠底沉降</button>
+                </div>
+              </div>
               <div class="sp-divider"></div>
               <div class="sr">
                 <label>视图模式</label>
@@ -827,6 +870,23 @@ onUnmounted(() => {
           </Transition>
         </div>
       </Transition>
+
+      <!-- Copy Modal -->
+      <Transition name="fade">
+        <div v-if="showCopyModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6" @click.stop="showCopyModal = false">
+          <div class="copy-modal bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl p-6 shadow-2xl flex flex-col gap-4 max-h-[80vh]" @click.stop>
+            <div class="flex items-center justify-between">
+              <h3 class="text-slate-200 font-bold">文字提取与复制</h3>
+              <button @click="showCopyModal = false" class="text-slate-400 hover:text-white px-2">✕</button>
+            </div>
+            <textarea v-model="selectedText" class="w-full flex-1 min-h-[150px] bg-slate-800 text-slate-300 resize-none rounded-xl p-4 outline-none border border-slate-700/50 focus:border-blue-500" style="user-select: text;"></textarea>
+            <div class="flex justify-end gap-3 mt-2">
+              <button @click="showCopyModal = false" class="px-5 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 font-medium transition-colors">取消</button>
+              <button @click="copyToClipboard" class="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 font-bold shadow-lg shadow-blue-500/20 transition-colors">复制全文</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </template>
   </div>
 </template>
@@ -837,27 +897,25 @@ onUnmounted(() => {
 .spinner { width:40px; height:40px; border:2px solid rgba(59,130,246,0.2); border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg) } }
 
-/* Cover overlay — opaque page that slides across to cover/reveal */
-.cover-overlay {
-  position: absolute; inset: 0; z-index: 5; pointer-events: none;
-  background-color: #0f172a;
+/* Reveal Transition Overlay */
+.snapshot-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; }
+.snapshot-layer.left { animation: clipLeft 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.snapshot-layer.right { animation: clipRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes clipLeft {
+  from { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  to { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
 }
-.cover-overlay.cover-left {
-  animation: coverSlideL 0.38s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
-  box-shadow: -8px 0 30px rgba(0,0,0,0.5);
+@keyframes clipRight {
+  from { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  to { clip-path: polygon(100% 0, 100% 0, 100% 100%, 100% 100%); }
 }
-.cover-overlay.cover-right {
-  animation: coverSlideR 0.38s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
-  box-shadow: 8px 0 30px rgba(0,0,0,0.5);
-}
-@keyframes coverSlideL {
-  0%   { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
-}
-@keyframes coverSlideR {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
+
+.sweep-line { position: absolute; top: 0; bottom: 0; width: 40px; z-index: 21; pointer-events: none; background: linear-gradient(to right, transparent, rgba(0,0,0,0.15), rgba(0,0,0,0.4), transparent); }
+.theme-n .sweep-line { background: linear-gradient(to right, transparent, rgba(255,255,255,0.05), rgba(255,255,255,0.15), transparent); }
+.sweep-line.left { animation: sweepLeft 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.sweep-line.right { animation: sweepRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes sweepLeft { from { transform: translateX(100vw); } to { transform: translateX(-40px); } }
+@keyframes sweepRight { from { transform: translateX(-40px); } to { transform: translateX(100vw); } }
 
 /* Carousel */
 .carousel { display:flex; width:300vw; height:100%; transform:translateX(-100vw); z-index:1; }
