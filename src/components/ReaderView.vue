@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, onUnmounted, nextTick } from 'vue'
+import darkThemeBg from '../assets/themes/dark.jpg'
+import paperThemeBg from '../assets/themes/paper.jpg'
+import greenThemeBg from '../assets/themes/green.jpg'
 
 interface Chapter { id: number; title: string; body: string; order_index: number }
 interface Book { id: number; title: string; author: string | null; path: string; progress_index: number; progress_offset: number }
@@ -23,7 +26,7 @@ const showSearch = ref(false)
 const showRules = ref(false)
 const isImmersive = ref(false)
 const bgImage = ref('')
-const blurBackground = ref(false)
+const blurAmount = ref(0)
 
 // Styling
 const fontSize = ref(20)
@@ -123,7 +126,7 @@ const loadSettings = async () => {
         if (s.key === 'reader_pageMode') pageMode.value = (s.value === 'double' ? 'double' : 'single')
         if (s.key === 'reader_doublePageStep') doublePageStep.value = (parseInt(s.value) === 1 ? 1 : 2)
         if (s.key === 'hideKeyHints') showKeyHints.value = (s.value !== 'true')
-        if (s.key === 'reader_blurBackground') blurBackground.value = (s.value === 'true')
+        if (s.key === 'reader_blurAmount') blurAmount.value = parseInt(s.value) || 0
         if (s.key === 'custom_themes') {
           try { customThemes.value = JSON.parse(s.value) || [] } catch (_) {}
         }
@@ -144,12 +147,8 @@ const updateStyling = () => {
   saveSetting('reader_coverColor', coverColor.value)
   saveSetting('reader_pageMode', pageMode.value)
   saveSetting('reader_doublePageStep', doublePageStep.value)
-  saveSetting('reader_blurBackground', blurBackground.value)
+  saveSetting('reader_blurAmount', blurAmount.value)
   recalc()
-}
-const toggleBlur = () => {
-  blurBackground.value = !blurBackground.value
-  updateStyling()
 }
 const setFlipMode = (mode: 'slide' | 'cover') => {
   flipMode.value = mode
@@ -173,9 +172,9 @@ const applyThemeConfig = (t: Partial<CustomTheme>) => {
 }
 
 const applyTheme = (type: string) => {
-  if (type === 'dark') { applyThemeConfig({ bgImage: 'https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?q=80&w=2620&auto=format&fit=crop', coverColor: '#0f172a', fontColor: '#e2e8f0' }) }
-  else if (type === 'paper') { applyThemeConfig({ bgImage: 'https://images.unsplash.com/photo-1603484477859-abe6a73f9366?auto=format&fit=crop&q=80&w=2600', coverColor: '#f4ecd8', fontColor: '#5c4b37' }) }
-  else if (type === 'green') { applyThemeConfig({ bgImage: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=2000', coverColor: '#cce8cf', fontColor: '#2a4b2a' }) }
+  if (type === 'dark') { applyThemeConfig({ bgImage: darkThemeBg, coverColor: '#0f172a', fontColor: '#e2e8f0' }) }
+  else if (type === 'paper') { applyThemeConfig({ bgImage: paperThemeBg, coverColor: '#f4ecd8', fontColor: '#5c4b37' }) }
+  else if (type === 'green') { applyThemeConfig({ bgImage: greenThemeBg, coverColor: '#cce8cf', fontColor: '#2a4b2a' }) }
 }
 
 const saveTheme = async () => {
@@ -555,12 +554,12 @@ onUnmounted(() => {
 <template>
   <div class="reader-root" @wheel="handleWheel" @click="handleClick">
     <!-- Separate background layer to allow blurring without blurring text -->
-    <div class="fixed inset-0 pointer-events-none transition-all duration-300" 
-         :style="readerBgStyle" 
-         :class="{ 'blur-xl scale-105': blurBackground && bgImage, 'bg-[#0f172a]': !bgImage }">
+    <div class="fixed inset-0 pointer-events-none transition-all duration-300 transform-gpu origin-center" 
+         :style="[readerBgStyle, { filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none', transform: blurAmount > 0 ? 'scale(1.1)' : 'none' }]"
+         :class="{ 'bg-[#0f172a]': !bgImage }">
     </div>
-    <!-- Darken overlay for better reading contrast -->
-    <div v-if="bgImage" class="fixed inset-0 pointer-events-none bg-black/40"></div>
+    <!-- Darken overlay, ONLY applied when blur > 0 to not ruin original image -->
+    <div v-if="bgImage && blurAmount > 0" class="fixed inset-0 pointer-events-none bg-black/40"></div>
 
     <div v-if="loading" class="load"><div class="spinner"></div><p>正在载入...</p></div>
 
@@ -674,25 +673,25 @@ onUnmounted(() => {
             <div class="m-prog"><input type="range" min="0" max="100" :value="progressPercent" @input="handleProgressSlider" class="m-slider"></div>
             <button @click="goToChapter(currentChapterIndex+1,true)" :disabled="currentChapterIndex>=chapters.length-1" class="m-ch">下一章 ⏭</button>
           </div>
-          <div class="m-info" style="pointer-events: auto;" @click.stop>
-            <button @click="openPanel('toc')" class="m-btn" :class="{active:showToc}">☰ 目录</button>
-            <div style="flex: 1;"></div>
-            <span>第 {{ currentChapterIndex+1 }}/{{ chapters.length }} 章</span>
-            <span>「{{ currentChapterData?.title }}」</span>
-            <span>第 {{ currentPage+1 }}/{{ totalPages }} 页</span>
+          <div class="m-info grid grid-cols-3 items-center" style="pointer-events: auto;" @click.stop>
+            <div class="flex items-center justify-start">
+              <button @click="openPanel('toc')" class="m-btn" :class="{active:showToc}">☰ 目录</button>
+            </div>
+            
+            <div class="flex items-center justify-center gap-2 text-center">
+              <span>第 {{ currentChapterIndex+1 }}/{{ chapters.length }} 章</span>
+              <span class="truncate max-w-[150px]">「{{ currentChapterData?.title }}」</span>
+              <span>第 {{ currentPage+1 }}/{{ totalPages }} 页</span>
+            </div>
 
-            <!-- Background Blur toggle -->
-            <button v-if="bgImage" @click="toggleBlur" class="ft-btn flex items-center gap-1 mx-2" :class="{ftActive: blurBackground}">
-              <span v-if="blurBackground">取消模糊</span>
-              <span v-else>背景模糊</span>
-            </button>
-
-            <!-- Flip mode toggle -->
-            <span class="flip-toggle">
-              翻页:
-              <button @click="setFlipMode('slide')" class="ft-btn" :class="{ftActive: flipMode==='slide'}">平移</button>
-              <button @click="setFlipMode('cover')" class="ft-btn" :class="{ftActive: flipMode==='cover'}">覆盖</button>
-            </span>
+            <div class="flex items-center justify-end">
+              <!-- Flip mode toggle -->
+              <span class="flip-toggle">
+                翻页:
+                <button @click="setFlipMode('slide')" class="ft-btn" :class="{ftActive: flipMode==='slide'}">平移</button>
+                <button @click="setFlipMode('cover')" class="ft-btn" :class="{ftActive: flipMode==='cover'}">覆盖</button>
+              </span>
+            </div>
           </div>
 
           <!-- Search panel -->
@@ -780,6 +779,7 @@ onUnmounted(() => {
               <div class="sr"><label>左右边距</label><input type="range" min="0" max="200" step="1" v-model.number="marginX" @input="updateStyling" class="sl"><input type="number" v-model.number="marginX" @change="updateStyling" class="sn"><span class="su">px</span></div>
               <div class="sr"><label>上下边距</label><input type="range" min="0" max="150" step="1" v-model.number="marginY" @input="updateStyling" class="sl"><input type="number" v-model.number="marginY" @change="updateStyling" class="sn"><span class="su">px</span></div>
               <div class="sr"><label>翻页底色</label><input type="color" v-model="coverColor" @input="updateStyling" class="sc"><input type="text" v-model="coverColor" @change="updateStyling" class="sn w72"><small class="sw-note">*有背景图时自动适配</small></div>
+              <div class="sr"><label>背景模糊</label><input type="range" min="0" max="40" step="1" v-model.number="blurAmount" @input="updateStyling" class="sl"><input type="number" v-model.number="blurAmount" @change="updateStyling" class="sn"><span class="su">px</span></div>
               <div class="sp-divider"></div>
               <div class="sr">
                 <label>视图模式</label>
