@@ -471,8 +471,11 @@ const handleKeydown = (e: KeyboardEvent) => {
   const k = e.key, c = e.code
   // ESC: exit fullscreen or close menu
   if (k === 'Escape') {
+    e.stopPropagation()
+    e.stopImmediatePropagation()
     if (isImmersive.value) { toggleImmersiveMode(); return }
     if (showMenu.value) { closeAll(); return }
+    handleGoBack()
     return
   }
   if (showMenu.value && k !== ' ' && c !== 'Space') return

@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   app: {
-    getVersion: () => ipcRenderer.invoke('app:getVersion')
+    getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    quit: () => ipcRenderer.invoke('app:quit')
   }
 })

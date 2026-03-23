@@ -246,3 +246,4 @@ ipcMain.handle('updater:install', async () => {
 })
 
 ipcMain.handle('app:getVersion', async () => app.getVersion())
+ipcMain.handle('app:quit', async () => app.quit())

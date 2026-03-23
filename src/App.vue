@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import BookshelfView from './components/BookshelfView.vue'
 import ReaderView from './components/ReaderView.vue'
 import SettingsView from './components/SettingsView.vue'
@@ -9,6 +9,7 @@ type View = 'bookshelf' | 'reader' | 'settings'
 const currentView = ref<View>('bookshelf')
 const selectedBookId = ref<number | null>(null)
 const isImmersive = ref(false)
+const showQuitConfirm = ref(false)
 
 const openBook = (bookId: number) => {
   selectedBookId.value = bookId
@@ -31,13 +32,53 @@ const toggleImmersive = async (val: boolean) => {
   await window.electronAPI.win.setFullScreen(val)
 }
 
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    if (showQuitConfirm.value) {
+      window.electronAPI.app.quit()
+      return
+    }
+    if (currentView.value === 'settings') {
+      goBack()
+      return
+    }
+    if (currentView.value === 'bookshelf') {
+      showQuitConfirm.value = true
+      return
+    }
+  } else if (e.key === 'Enter' && showQuitConfirm.value) {
+    window.electronAPI.app.quit()
+  }
+}
+
+const cancelQuit = () => { showQuitConfirm.value = false }
+const confirmQuit = () => { window.electronAPI.app.quit() }
+
 onMounted(() => {
-  // No global bg image needed — reader handles its own bg
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
 <template>
   <div class="min-h-screen bg-slate-950 text-white selection:bg-blue-500/30 transition-all duration-500">
+    <!-- Quit Confirmation Modal -->
+    <Transition name="fade">
+      <div v-if="showQuitConfirm" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center" @click.self="cancelQuit">
+        <div class="glass-dark p-6 rounded-2xl max-w-sm w-full shadow-2xl border border-white/10 text-center">
+          <h3 class="text-xl font-bold mb-2">退出阅读器</h3>
+          <p class="text-sm text-slate-300 mb-6">确定要退出 EleWinReader 吗？</p>
+          <div class="flex gap-3">
+            <button @click="cancelQuit" class="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition-all font-semibold">取消</button>
+            <button @click="confirmQuit" class="flex-1 py-2 rounded-xl bg-red-500/80 hover:bg-red-500 transition-all font-semibold shadow-lg shadow-red-500/20">退出 (ESC/Enter)</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Navigation (hidden in reader) -->
     <nav 
       v-if="currentView !== 'reader'"

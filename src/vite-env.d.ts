@@ -33,6 +33,7 @@ export interface ElectronAPI {
   }
   app: {
     getVersion: () => Promise<string>
+    quit: () => Promise<void>
   }
 }
 
