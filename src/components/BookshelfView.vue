@@ -126,7 +126,8 @@ onMounted(() => fetchBooks())
     </div>
 
     <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-      <div v-for="book in books" :key="book.id" class="relative group cursor-pointer" @click="emit('open-book', book.id)">
+      <div v-for="(book, index) in books" :key="book.id" class="relative group cursor-pointer bookshelf-card" 
+           :style="{ animationDelay: `${index * 40}ms` }" @click="emit('open-book', book.id)">
         <div class="aspect-[3/4.2] glass-dark rounded-2xl overflow-hidden relative shadow-xl shadow-black/20 group-hover:shadow-blue-500/10 group-hover:-translate-y-2 transition-all duration-500 border border-white/5 group-hover:border-blue-500/30"
              :class="{'ring-2 ring-amber-400/50': book.pinned}">
           <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10"></div>
@@ -174,3 +175,14 @@ onMounted(() => fetchBooks())
     </div>
   </div>
 </template>
+
+<style scoped>
+.bookshelf-card {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: cardFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes cardFadeIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>

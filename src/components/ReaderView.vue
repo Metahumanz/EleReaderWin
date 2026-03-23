@@ -659,7 +659,7 @@ onUnmounted(() => {
       </div>
 
       <!-- MENU -->
-      <Transition name="fade">
+      <Transition name="menu-slide">
         <div v-if="showMenu" class="menu-ov">
           <div class="m-top" @click.stop>
             <button @click="handleGoBack" class="m-back">← 书架</button>
@@ -1013,4 +1013,13 @@ onUnmounted(() => {
 .sf-enter-active,.sf-leave-active { transition:all .3s ease; }
 .sf-enter-from { opacity:0; transform:translateY(12px); }
 .sf-leave-to { opacity:0; transform:translateY(12px); }
+
+/* Menu Slide Transition */
+.menu-slide-enter-active, .menu-slide-leave-active { transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.menu-slide-enter-from, .menu-slide-leave-to { opacity: 0; }
+.m-top { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.menu-slide-enter-from .m-top, .menu-slide-leave-to .m-top { transform: translateY(-100%); }
+.m-bot, .m-info { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.menu-slide-enter-from .m-bot, .menu-slide-leave-to .m-bot,
+.menu-slide-enter-from .m-info, .menu-slide-leave-to .m-info { transform: translateY(100%); }
 </style>

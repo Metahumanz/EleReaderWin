@@ -283,6 +283,12 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-section { animation: slideIn 0.5s ease-out; }
-@keyframes slideIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+section { animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+section:nth-child(1) { animation-delay: 0.05s; }
+section:nth-child(2) { animation-delay: 0.1s; }
+section:nth-child(3) { animation-delay: 0.15s; }
+section:nth-child(4) { animation-delay: 0.2s; }
+section:nth-child(5) { animation-delay: 0.25s; }
+section:nth-child(6) { animation-delay: 0.3s; }
+@keyframes slideIn { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
 </style>
