@@ -35,6 +35,9 @@ export interface ElectronAPI {
     getVersion: () => Promise<string>
     quit: () => Promise<void>
   }
+  webdav: {
+    request: (opts: { url: string; method: string; headers?: Record<string, string>; body?: string }) => Promise<{ status?: number; data?: string; error?: string }>
+  }
 }
 
 declare global {

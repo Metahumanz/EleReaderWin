@@ -21,6 +21,13 @@ const updateDetail = ref('')
 const updateAvailable = ref(false)
 const updateReady = ref(false)
 
+const webdavUrl = ref('')
+const webdavUser = ref('')
+const webdavPass = ref('')
+const webdavSync = ref(false)
+const webdavTestResult = ref('')
+const webdavTesting = ref(false)
+
 // Replacement rules
 const allRules = ref<ReplacementRule[]>([])
 const books = ref<Book[]>([])
@@ -32,9 +39,12 @@ const loadSettings = async () => {
     const settings = result as Setting[]
     for (const s of settings) {
       if (s.key === 'bgImage') { bgImage.value = s.value || ''; bgPreview.value = s.value || '' }
-      if (s.key === 'hideKeyHints') { showKeyHints.value = s.value !== 'true' }
       if (s.key === 'reader_nextKeys') { try { nextKeys.value = JSON.parse(s.value) } catch (e){} }
       if (s.key === 'reader_prevKeys') { try { prevKeys.value = JSON.parse(s.value) } catch (e){} }
+      if (s.key === 'webdavUrl') webdavUrl.value = s.value
+      if (s.key === 'webdavUser') webdavUser.value = s.value
+      if (s.key === 'webdavPass') webdavPass.value = s.value
+      if (s.key === 'webdavSync') webdavSync.value = s.value === 'true'
     }
   } catch (e) { console.error(e) }
 }
@@ -58,6 +68,36 @@ const applyBgImage = async () => {
   bgImage.value = v; bgPreview.value = v
   await saveSetting('bgImage', v)
   emit('refresh-settings')
+}
+
+const saveWebdav = async () => {
+  let url = webdavUrl.value.trim()
+  if (url && !url.endsWith('/')) url += '/'
+  webdavUrl.value = url
+  await saveSetting('webdavUrl', url)
+  await saveSetting('webdavUser', webdavUser.value.trim())
+  await saveSetting('webdavPass', webdavPass.value.trim())
+  await saveSetting('webdavSync', webdavSync.value ? 'true' : 'false')
+}
+
+const testWebdav = async () => {
+  if (!webdavUrl.value) { webdavTestResult.value = '❌ 请填写服务器地址'; return }
+  webdavTesting.value = true
+  webdavTestResult.value = '连接中...'
+  await saveWebdav()
+  const auth = btoa(`${webdavUser.value}:${webdavPass.value}`)
+  const res = await window.electronAPI.webdav.request({
+    url: webdavUrl.value, method: 'PROPFIND', headers: { 'Authorization': `Basic ${auth}`, 'Depth': '0' }
+  })
+  if (res.error) webdavTestResult.value = '❌ 连接异常: ' + res.error
+  else if (res.status && res.status >= 200 && res.status < 300) {
+    webdavTestResult.value = '✅ 连接成功！'
+    await window.electronAPI.webdav.request({
+      url: webdavUrl.value + 'bookProgress/', method: 'MKCOL', headers: { 'Authorization': `Basic ${auth}` }
+    })
+  }
+  else webdavTestResult.value = `❌失败(HTTP ${res.status}): ` + (res.data ? res.data.substring(0, 30) : '')
+  webdavTesting.value = false
 }
 
 const toggleKeyHints = async () => {
@@ -233,6 +273,43 @@ onMounted(async () => {
       </div>
     </section>
 
+    <!-- WebDAV Sync -->
+    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
+      <div class="flex items-center gap-3 mb-2"><span class="text-xl">☁️</span><h3 class="text-lg font-bold">WebDAV 进度同步 (兼容阅读)</h3></div>
+      <p class="text-sm text-slate-400">配置 WebDAV 以实现多端无缝同步阅读进度（自动落库到 <code>bookProgress/</code>，完全兼容 Legado 格式）。</p>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm text-slate-400 mb-2">服务器地址 (需带 http/https 且以 / 结尾)</label>
+          <input type="text" v-model="webdavUrl" @change="saveWebdav" placeholder="例如: https://dav.jianguoyun.com/dav/" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-slate-400 mb-2">账号</label>
+            <input type="text" v-model="webdavUser" @change="saveWebdav" placeholder="用户名" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-400 mb-2">密码 / 应用密码</label>
+            <input type="password" v-model="webdavPass" @change="saveWebdav" placeholder="密码" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between pt-2">
+        <label class="flex items-center gap-3 cursor-pointer select-none">
+          <input type="checkbox" v-model="webdavSync" @change="saveWebdav" class="hidden" />
+          <div class="w-12 h-6 rounded-full transition-colors duration-300 relative border border-white/10" :class="webdavSync ? 'bg-blue-600' : 'bg-white/5'">
+            <div class="absolute w-4 h-4 rounded-full bg-white top-1 transition-transform duration-300 shadow-sm" :class="!webdavSync ? 'left-1' : 'translate-x-6 left-1'"></div>
+          </div>
+          <span class="text-slate-300 text-sm">自动同步阅读进度</span>
+        </label>
+        
+        <div class="flex items-center gap-4">
+          <span v-if="webdavTestResult" class="text-sm font-bold" :class="webdavTestResult.startsWith('✅') ? 'text-green-400' : 'text-red-400'">{{ webdavTestResult }}</span>
+          <button @click="testWebdav" :disabled="webdavTesting" class="px-5 py-2 glass rounded-xl font-bold transition-all active:scale-95 hover:bg-white/10 disabled:opacity-50">测试连接</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Background -->
     <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
       <div class="flex items-center gap-3 mb-2"><span class="text-xl">🎨</span><h3 class="text-lg font-bold">阅读背景</h3></div>
@@ -343,5 +420,6 @@ section:nth-child(4) { animation-delay: 0.2s; }
 section:nth-child(5) { animation-delay: 0.25s; }
 section:nth-child(6) { animation-delay: 0.3s; }
 section:nth-child(7) { animation-delay: 0.35s; }
+section:nth-child(8) { animation-delay: 0.4s; }
 @keyframes slideIn { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
 </style>

@@ -247,3 +247,17 @@ ipcMain.handle('updater:install', async () => {
 
 ipcMain.handle('app:getVersion', async () => app.getVersion())
 ipcMain.handle('app:quit', async () => app.quit())
+
+ipcMain.handle('webdav:request', async (_, opts: { url: string; method: string; headers?: any; body?: string }) => {
+  try {
+    const res = await fetch(opts.url, {
+      method: opts.method,
+      headers: opts.headers || {},
+      body: opts.body
+    })
+    const text = await res.text()
+    return { status: res.status, data: text }
+  } catch (error: any) {
+    return { error: error.message || String(error) }
+  }
+})

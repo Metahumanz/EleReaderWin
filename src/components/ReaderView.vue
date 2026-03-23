@@ -5,7 +5,7 @@ import paperThemeBg from '../assets/themes/paper.jpg'
 import greenThemeBg from '../assets/themes/green.jpg'
 
 interface Chapter { id: number; title: string; body: string; order_index: number }
-interface Book { id: number; title: string; author: string | null; path: string; progress_index: number; progress_offset: number }
+interface Book { id: number; title: string; author: string | null; path: string; progress_index: number; progress_offset: number; last_read?: string }
 interface ReplacementRule { id: number; pattern: string; replacement: string; scope: string; book_id: number | null; is_regex: number; active: number }
 interface SearchResult { chapterIndex: number; chapterTitle: string; snippet: string }
 
@@ -113,6 +113,11 @@ const alignBottom = ref(false)
 const showCopyModal = ref(false)
 const selectedText = ref('')
 
+const webdavUrl = ref('')
+const webdavUser = ref('')
+const webdavPass = ref('')
+const webdavSync = ref(false)
+
 const closeKeyHints = () => { showKeyHints.value = false }
 const disableKeyHints = () => { showKeyHints.value = false; saveSetting('hideKeyHints', 'true') }
 
@@ -140,6 +145,10 @@ const loadSettings = async () => {
         if (s.key === 'reader_blurAmount') blurAmount.value = parseInt(s.value) || 0
         if (s.key === 'reader_textAlign') textAlign.value = s.value === 'justify' ? 'justify' : 'left'
         if (s.key === 'reader_alignBottom') alignBottom.value = s.value === 'true'
+        if (s.key === 'webdavUrl') webdavUrl.value = s.value
+        if (s.key === 'webdavUser') webdavUser.value = s.value
+        if (s.key === 'webdavPass') webdavPass.value = s.value
+        if (s.key === 'webdavSync') webdavSync.value = s.value === 'true'
         if (s.key === 'custom_themes') {
           try { customThemes.value = JSON.parse(s.value) || [] } catch (_) {}
         }
@@ -327,11 +336,36 @@ const prevPageOffset = computed(() => {
   return `-${Math.max(0, prevPageCount.value - 1) * pageWidth}px`
 })
 
+const uploadProgressToWebdav = async () => {
+  if (!webdavSync.value || !webdavUrl.value || !book.value) return
+  const auth = btoa(`${webdavUser.value}:${webdavPass.value}`)
+  let author = book.value.author || '未知'
+  if (!author.trim()) author = '未知'
+  let safeName = book.value.title.replace(/[\\/:"*?<>|]/g, '_')
+  let safeAuthor = author.replace(/[\\/:"*?<>|]/g, '_')
+  const filename = `${safeName}_${safeAuthor}.json`
+  const data = {
+    name: book.value.title,
+    author: author,
+    durChapterIndex: currentChapterIndex.value,
+    durChapterPos: currentPage.value,
+    durChapterTitle: currentChapterData.value?.title || '',
+    durChapterTime: Date.now()
+  }
+  window.electronAPI.webdav.request({
+    url: webdavUrl.value + 'bookProgress/' + encodeURIComponent(filename),
+    method: 'PUT',
+    headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).catch(e => console.error('WebDAV upload err:', e))
+}
+
 const saveProgress = async () => {
   if (!book.value) return
   try {
     await window.electronAPI.db.query('UPDATE books SET progress_index = ?, progress_offset = ?, last_read = ? WHERE id = ?',
       [currentChapterIndex.value, currentPage.value, new Date().toISOString(), props.bookId])
+    uploadProgressToWebdav()
   } catch (e) { console.error(e) }
 }
 
@@ -566,8 +600,36 @@ watch([fontSize, lineHeight, letterSpacing, marginX, marginY, fontFamily, fontWe
 // Save progress periodically
 watch(currentPage, () => saveProgress())
 
+const downloadProgressFromWebdav = async () => {
+  if (!webdavSync.value || !webdavUrl.value || !book.value) return
+  const auth = btoa(`${webdavUser.value}:${webdavPass.value}`)
+  let author = book.value.author || '未知'
+  if (!author.trim()) author = '未知'
+  let safeName = book.value.title.replace(/[\\/:"*?<>|]/g, '_')
+  let safeAuthor = author.replace(/[\\/:"*?<>|]/g, '_')
+  const filename = `${safeName}_${safeAuthor}.json`
+  
+  try {
+    const res = await window.electronAPI.webdav.request({
+      url: webdavUrl.value + 'bookProgress/' + encodeURIComponent(filename),
+      method: 'GET',
+      headers: { 'Authorization': `Basic ${auth}` }
+    })
+    if (res.status === 200 && res.data) {
+      const remote = JSON.parse(res.data)
+      const localTime = book.value.last_read ? new Date(book.value.last_read).getTime() : 0
+      if (remote.durChapterTime && remote.durChapterTime > localTime + 5000) {
+        if (remote.durChapterIndex >= 0 && remote.durChapterIndex < chapters.value.length && remote.durChapterIndex !== currentChapterIndex.value) {
+          goToChapter(remote.durChapterIndex, true)
+        }
+      }
+    }
+  } catch (e) { console.error('WebDAV download err:', e) }
+}
+
 onMounted(async () => {
   await loadSettings(); await fetchBook(); await fetchChapters(); await fetchRules()
+  await downloadProgressFromWebdav()
   loading.value = false
   setTimeout(calculatePages, 300)
   window.addEventListener('resize', recalc)
