@@ -22,6 +22,7 @@ const updateAvailable = ref(false)
 const updateReady = ref(false)
 
 const webdavUrl = ref('')
+const webdavDir = ref('Books')
 const webdavUser = ref('')
 const webdavPass = ref('')
 const webdavSync = ref(false)
@@ -42,6 +43,7 @@ const loadSettings = async () => {
       if (s.key === 'reader_nextKeys') { try { nextKeys.value = JSON.parse(s.value) } catch (e){} }
       if (s.key === 'reader_prevKeys') { try { prevKeys.value = JSON.parse(s.value) } catch (e){} }
       if (s.key === 'webdavUrl') webdavUrl.value = s.value
+      if (s.key === 'webdavDir') webdavDir.value = s.value
       if (s.key === 'webdavUser') webdavUser.value = s.value
       if (s.key === 'webdavPass') webdavPass.value = s.value
       if (s.key === 'webdavSync') webdavSync.value = s.value === 'true'
@@ -74,7 +76,12 @@ const saveWebdav = async () => {
   let url = webdavUrl.value.trim()
   if (url && !url.endsWith('/')) url += '/'
   webdavUrl.value = url
+  let dir = webdavDir.value.trim()
+  if (dir.startsWith('/')) dir = dir.substring(1)
+  if (dir && !dir.endsWith('/')) dir += '/'
+  webdavDir.value = dir
   await saveSetting('webdavUrl', url)
+  await saveSetting('webdavDir', dir)
   await saveSetting('webdavUser', webdavUser.value.trim())
   await saveSetting('webdavPass', webdavPass.value.trim())
   await saveSetting('webdavSync', webdavSync.value ? 'true' : 'false')
@@ -92,8 +99,17 @@ const testWebdav = async () => {
   if (res.error) webdavTestResult.value = '❌ 连接异常: ' + res.error
   else if (res.status && res.status >= 200 && res.status < 300) {
     webdavTestResult.value = '✅ 连接成功！'
+    // Ensure bookProgress folder inside subfolder is created
+    let baseURL = webdavUrl.value
+    if (webdavDir.value) baseURL += webdavDir.value
+    // Create subfolder first if it's set
+    if (webdavDir.value) {
+      await window.electronAPI.webdav.request({
+        url: baseURL, method: 'MKCOL', headers: { 'Authorization': `Basic ${auth}` }
+      })
+    }
     await window.electronAPI.webdav.request({
-      url: webdavUrl.value + 'bookProgress/', method: 'MKCOL', headers: { 'Authorization': `Basic ${auth}` }
+      url: baseURL + 'bookProgress/', method: 'MKCOL', headers: { 'Authorization': `Basic ${auth}` }
     })
   }
   else webdavTestResult.value = `❌失败(HTTP ${res.status}): ` + (res.data ? res.data.substring(0, 30) : '')
@@ -279,9 +295,15 @@ onMounted(async () => {
       <p class="text-sm text-slate-400">配置 WebDAV 以实现多端无缝同步阅读进度（自动落库到 <code>bookProgress/</code>，完全兼容 Legado 格式）。</p>
       
       <div class="space-y-4">
-        <div>
-          <label class="block text-sm text-slate-400 mb-2">服务器地址 (需带 http/https 且以 / 结尾)</label>
-          <input type="text" v-model="webdavUrl" @change="saveWebdav" placeholder="例如: https://dav.jianguoyun.com/dav/" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+        <div class="grid grid-cols-[2fr_1fr] gap-4">
+          <div>
+            <label class="block text-sm text-slate-400 mb-2">服务器地址 (需带 http(s) 且以 / 结尾)</label>
+            <input type="text" v-model="webdavUrl" @change="saveWebdav" placeholder="例如: https://dav.jianguoyun.com/dav/" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-400 mb-2">子文件夹</label>
+            <input type="text" v-model="webdavDir" @change="saveWebdav" placeholder="默认 Books" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>

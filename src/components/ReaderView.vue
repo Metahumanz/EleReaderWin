@@ -114,6 +114,7 @@ const showCopyModal = ref(false)
 const selectedText = ref('')
 
 const webdavUrl = ref('')
+const webdavDir = ref('Books')
 const webdavUser = ref('')
 const webdavPass = ref('')
 const webdavSync = ref(false)
@@ -146,6 +147,7 @@ const loadSettings = async () => {
         if (s.key === 'reader_textAlign') textAlign.value = s.value === 'justify' ? 'justify' : 'left'
         if (s.key === 'reader_alignBottom') alignBottom.value = s.value === 'true'
         if (s.key === 'webdavUrl') webdavUrl.value = s.value
+        if (s.key === 'webdavDir') webdavDir.value = s.value
         if (s.key === 'webdavUser') webdavUser.value = s.value
         if (s.key === 'webdavPass') webdavPass.value = s.value
         if (s.key === 'webdavSync') webdavSync.value = s.value === 'true'
@@ -352,8 +354,10 @@ const uploadProgressToWebdav = async () => {
     durChapterTitle: currentChapterData.value?.title || '',
     durChapterTime: Date.now()
   }
+  let baseURL = webdavUrl.value
+  if (webdavDir.value) baseURL += webdavDir.value
   window.electronAPI.webdav.request({
-    url: webdavUrl.value + 'bookProgress/' + encodeURIComponent(filename),
+    url: baseURL + 'bookProgress/' + encodeURIComponent(filename),
     method: 'PUT',
     headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -609,9 +613,12 @@ const downloadProgressFromWebdav = async () => {
   let safeAuthor = author.replace(/[\\/:"*?<>|]/g, '_')
   const filename = `${safeName}_${safeAuthor}.json`
   
+  let baseURL = webdavUrl.value
+  if (webdavDir.value) baseURL += webdavDir.value
+
   try {
     const res = await window.electronAPI.webdav.request({
-      url: webdavUrl.value + 'bookProgress/' + encodeURIComponent(filename),
+      url: baseURL + 'bookProgress/' + encodeURIComponent(filename),
       method: 'GET',
       headers: { 'Authorization': `Basic ${auth}` }
     })
