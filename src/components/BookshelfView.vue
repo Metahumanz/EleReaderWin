@@ -100,77 +100,79 @@ onMounted(() => fetchBooks())
 </script>
 
 <template>
-  <div class="p-8 max-w-7xl mx-auto">
-    <div class="flex items-center justify-between mb-10">
+  <div class="pt-6">
+    <div class="flex items-center justify-between mb-8">
       <div>
-        <h2 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">我的书架</h2>
-        <p class="text-slate-400 text-sm mt-1">共 {{ books.length }} 本书籍</p>
+        <h2 class="text-[22px] font-semibold text-white/90 tracking-wide">我的书架</h2>
+        <p class="text-white/50 text-[13px] mt-1">共 {{ books.length }} 本书籍</p>
       </div>
       <button @click="addBook" :disabled="importing"
-        class="group px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95">
-        <span class="text-lg group-hover:scale-110 transition-transform">{{ importing ? '⏳' : '+' }}</span>
-        <span class="font-medium">{{ importing ? '正在导入...' : '添加书籍' }}</span>
+        class="group px-5 py-2 min-w-[120px] bg-[#005fb8] hover:bg-[#005fb8]/90 disabled:bg-white/5 disabled:text-white/30 rounded-md transition-colors flex justify-center items-center gap-2 shadow-sm font-medium border border-black/20">
+        <span class="text-xl leading-none">{{ importing ? '⏳' : '+' }}</span>
+        <span class="text-[14px]">{{ importing ? '正在导入...' : '添加书籍' }}</span>
       </button>
     </div>
 
-    <div v-if="loading" class="flex flex-col items-center justify-center py-24 gap-4">
-      <div class="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-      <p class="text-slate-400 animate-pulse">正在获取书籍...</p>
+    <!-- Empty State -->
+    <div v-if="loading" class="flex flex-col items-center justify-center py-32 gap-4">
+      <div class="w-10 h-10 border-4 border-[#005fb8]/30 border-t-[#005fb8] rounded-full animate-spin"></div>
+      <p class="text-white/50 text-sm animate-pulse">正在获取书籍...</p>
     </div>
 
-    <div v-else-if="books.length === 0" class="text-center py-24 glass-dark rounded-3xl border-dashed border-2 border-white/5 mx-auto max-w-md">
-      <div class="text-6xl mb-6">📚</div>
-      <p class="text-lg text-slate-300 mb-6">书架空空如也</p>
-      <p class="text-sm text-slate-500 mb-4">支持 TXT 和 EPUB 格式</p>
-      <button @click="addBook" class="px-8 py-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 active:scale-95">开启阅读之旅</button>
+    <div v-else-if="books.length === 0" class="text-center py-28 bg-[#2d2d2d] rounded-xl border border-white/5 mx-auto max-w-lg shadow-sm">
+      <div class="text-5xl mb-6 opacity-60">📚</div>
+      <p class="text-lg text-white/80 font-medium mb-3">书架空空如也</p>
+      <p class="text-[13px] text-white/40 mb-8">支持 TXT 和 EPUB 格式的本地解析与无缝阅读</p>
+      <button @click="addBook" class="px-8 py-2.5 bg-white/5 hover:bg-white/10 rounded-md transition-colors border border-white/10 text-[14px] font-medium">开启阅读之旅</button>
     </div>
 
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+    <!-- Grid -->
+    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pb-10">
       <div v-for="(book, index) in books" :key="book.id" class="relative group cursor-pointer bookshelf-card" 
-           :style="{ animationDelay: `${index * 40}ms` }" @click="emit('open-book', book.id)">
-        <div class="aspect-[3/4.2] glass-dark rounded-2xl overflow-hidden relative shadow-xl shadow-black/20 group-hover:shadow-blue-500/10 group-hover:-translate-y-2 transition-all duration-500 border border-white/5 group-hover:border-blue-500/30"
-             :class="{'ring-2 ring-amber-400/50': book.pinned}">
-          <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10"></div>
+           :style="{ animationDelay: `${index * 30}ms` }" @click="emit('open-book', book.id)">
+        <div class="aspect-[3/4.2] bg-[#2d2d2d] rounded-xl overflow-hidden relative shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-white/[0.08] hover:border-white/[0.15]"
+             :class="{'ring-1 ring-[#005fb8]': book.pinned}">
+          <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#111111]/90 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
 
           <!-- Pin badge -->
-          <div v-if="book.pinned" class="absolute top-2 left-2 z-20 text-amber-400 text-xs font-bold bg-black/40 backdrop-blur-md rounded-lg px-2 py-0.5">📌 置顶</div>
+          <div v-if="book.pinned" class="absolute top-2 left-2 z-20 text-white text-[10px] font-bold bg-[#005fb8]/90 backdrop-blur-md rounded px-1.5 py-0.5 border border-[#005fb8]">置顶</div>
 
           <!-- Cover image or default icon -->
-          <img v-if="book.cover_path" :src="book.cover_path" class="w-full h-full object-cover" alt="封面" @error="(e: Event) => (e.target as HTMLImageElement).style.display='none'" />
-          <div v-else class="h-full w-full flex items-center justify-center">
-            <span class="text-6xl group-hover:scale-110 transition-transform duration-500">📖</span>
+          <img v-if="book.cover_path" :src="book.cover_path" class="w-full h-full object-cover rounded-xl" alt="封面" @error="(e: Event) => (e.target as HTMLImageElement).style.display='none'" />
+          <div v-else class="h-full w-full flex items-center justify-center opacity-70">
+            <span class="text-5xl group-hover:scale-105 transition-transform duration-500">📖</span>
           </div>
 
           <!-- Actions -->
-          <div class="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-20">
-            <button @click.stop="togglePin(book)" class="p-2 hover:bg-amber-500 rounded-xl backdrop-blur-md transition-all"
-                    :class="book.pinned ? 'bg-amber-500/40 text-amber-300' : 'bg-white/10 text-white/60 hover:text-white'" :title="book.pinned ? '取消置顶' : '置顶'">
+          <div class="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-20">
+            <button @click.stop="togglePin(book)" class="p-1.5 rounded-md backdrop-blur-md transition-colors border border-transparent hover:border-white/10"
+                    :class="book.pinned ? 'bg-[#005fb8]/80 text-white' : 'bg-black/50 text-white/70 hover:bg-black/80 hover:text-white'" :title="book.pinned ? '取消置顶' : '置顶'">
               <span class="text-sm">📌</span>
             </button>
-            <button @click.stop="setCover(book.id)" class="p-2 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white rounded-xl backdrop-blur-md transition-all" title="设置封面">
+            <button @click.stop="setCover(book.id)" class="p-1.5 bg-black/50 hover:bg-black/80 text-white/70 hover:text-white rounded-md backdrop-blur-md transition-colors border border-transparent hover:border-white/10" title="设置封面">
               <span class="text-sm">🖼️</span>
             </button>
-            <button v-if="book.cover_path" @click.stop="removeCover(book.id)" class="p-2 bg-slate-500/20 hover:bg-slate-500 text-slate-400 hover:text-white rounded-xl backdrop-blur-md transition-all" title="取消封面">
+            <button v-if="book.cover_path" @click.stop="removeCover(book.id)" class="p-1.5 bg-black/50 hover:bg-black/80 text-white/70 hover:text-white rounded-md backdrop-blur-md transition-colors border border-transparent hover:border-white/10" title="取消封面">
               <span class="text-sm">✕</span>
             </button>
-            <button @click.stop="deleteBook(book.id)" class="p-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-xl backdrop-blur-md transition-all" title="删除">
+            <button @click.stop="deleteBook(book.id)" class="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-md backdrop-blur-md transition-colors border border-transparent hover:border-red-500/50 shadow-sm" title="删除">
               <span class="text-sm">🗑️</span>
             </button>
           </div>
         </div>
 
-        <div class="mt-4 px-1">
-          <h3 class="font-bold text-slate-100 truncate group-hover:text-blue-400 transition-colors duration-300">{{ book.title }}</h3>
-          <div class="flex items-center justify-between mt-1">
-            <p v-if="book.author" class="text-xs text-slate-400 truncate max-w-[70%]">{{ book.author }}</p>
-            <p class="text-[10px] text-slate-500 font-mono">{{ formatDate(book.last_read) }}</p>
+        <div class="mt-3 px-1">
+          <h3 class="font-semibold text-[14px] text-white/90 truncate group-hover:text-[#005fb8] transition-colors duration-200">{{ book.title }}</h3>
+          <div class="flex items-center justify-between mt-0.5">
+            <p v-if="book.author" class="text-[12px] text-white/50 truncate max-w-[65%]">{{ book.author }}</p>
+            <p class="text-[10px] text-white/30 font-mono">{{ formatDate(book.last_read) }}</p>
           </div>
         </div>
       </div>
 
-      <div @click="addBook" class="aspect-[3/4.2] glass-card rounded-2xl flex flex-col items-center justify-center gap-3 border-dashed border-2 border-white/5 opacity-50 hover:opacity-100 transition-all cursor-pointer hover:border-blue-500/30">
-        <span class="text-3xl">+</span>
-        <span class="text-sm font-medium text-slate-400">添加书籍</span>
+      <div @click="addBook" class="aspect-[3/4.2] bg-[#2d2d2d]/50 rounded-xl flex flex-col items-center justify-center gap-3 border-dashed border-2 border-white/10 opacity-60 hover:opacity-100 transition-all cursor-pointer hover:border-white/30 hover:bg-[#2d2d2d]">
+        <span class="text-3xl font-light">+</span>
+        <span class="text-[13px] font-medium text-white/60">添加书籍</span>
       </div>
     </div>
   </div>

@@ -236,215 +236,245 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="p-8 max-w-4xl mx-auto space-y-10 pb-20">
-    <div class="flex items-center gap-6">
-      <button @click="emit('back')" class="p-3 glass rounded-2xl hover:bg-white/10 transition-all active:scale-90">
-        <span class="text-xl">←</span>
-      </button>
-      <h2 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">偏好设置</h2>
+  <div class="pt-2 pb-20">
+    <div class="mb-10 px-1">
+      <h2 class="text-[22px] font-semibold text-white/90 tracking-wide">偏好设置</h2>
+      <p class="text-white/50 text-[13px] mt-1">定制 EleWinReader 的各项核心行为与界面特质</p>
     </div>
 
-    <!-- Window -->
-    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
-      <div class="flex items-center gap-3 mb-2"><span class="text-xl">🪟</span><h3 class="text-lg font-bold">窗口比例</h3></div>
-      <p class="text-sm text-slate-400">快速调整主窗口尺寸比例（窗口大小和位置会自动记忆，最小 300×300）</p>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <button @click="setAspectRatio(16/9)" class="glass px-4 py-3 rounded-xl hover:bg-blue-500/20 hover:border-blue-500/50 transition-all font-mono text-sm">16 : 9</button>
-        <button @click="setAspectRatio(9/16)" class="glass px-4 py-3 rounded-xl hover:bg-blue-500/20 hover:border-blue-500/50 transition-all font-mono text-sm">9 : 16</button>
-        <button @click="setAspectRatio(4/3)" class="glass px-4 py-3 rounded-xl hover:bg-blue-500/20 hover:border-blue-500/50 transition-all font-mono text-sm">4 : 3</button>
-        <button @click="setAspectRatio(3/4)" class="glass px-4 py-3 rounded-xl hover:bg-blue-500/20 hover:border-blue-500/50 transition-all font-mono text-sm">3 : 4</button>
-      </div>
-    </section>
-
-    <!-- UI & Helpers -->
-    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
-      <div class="flex items-center gap-3 mb-2"><span class="text-xl">⌨️</span><h3 class="text-lg font-bold">阅读助手</h3></div>
-      <label class="flex items-center gap-3 cursor-pointer select-none">
-        <input type="checkbox" v-model="showKeyHints" @change="toggleKeyHints" class="hidden" />
-        <div class="w-12 h-6 rounded-full transition-colors duration-300 relative border border-white/10" :class="showKeyHints ? 'bg-blue-600' : 'bg-white/5'">
-          <div class="absolute w-4 h-4 rounded-full bg-white top-1 transition-transform duration-300 shadow-sm" :class="!showKeyHints ? 'left-1' : 'translate-x-6 left-1'"></div>
-        </div>
-        <span class="text-slate-300 text-sm">显示快捷键与操作提示</span>
-      </label>
-      <p class="text-xs text-slate-500 mt-1 pl-[3.75rem]">开启后，进入阅读界面时将显示快捷键操作指南。</p>
-
-      <label class="flex items-center gap-3 cursor-pointer select-none">
-        <input type="checkbox" v-model="autoOpenLastRead" @change="toggleAutoOpenLastRead" class="hidden" />
-        <div class="w-12 h-6 rounded-full transition-colors duration-300 relative border border-white/10" :class="autoOpenLastRead ? 'bg-blue-600' : 'bg-white/5'">
-          <div class="absolute w-4 h-4 rounded-full bg-white top-1 transition-transform duration-300 shadow-sm" :class="!autoOpenLastRead ? 'left-1' : 'translate-x-6 left-1'"></div>
-        </div>
-        <span class="text-slate-300 text-sm">启动直达续读</span>
-      </label>
-      <p class="text-xs text-slate-500 mt-1 pl-[3.75rem]">开启后，打开软件直接进入上次阅读的书籍，不再停留于书架。</p>
-    </section>
-
-    <!-- Key Bindings -->
-    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
-      <div class="flex items-center gap-3 mb-2"><span class="text-xl">⌨️</span><h3 class="text-lg font-bold">翻页快捷键</h3></div>
-      <p class="text-sm text-slate-400">点击并在输入框中按下您希望绑定的按键即可录入；点击已存在的按键进行移除。</p>
-      <div class="space-y-4">
-        <div class="flex-1">
-          <label class="block text-sm text-slate-400 mb-2">下一页 / 下一章</label>
-          <div class="flex items-center gap-2 flex-wrap mb-2">
-            <span v-for="k in nextKeys" :key="k" @click="removeNextKey(k)" class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-red-500/30 hover:text-red-300 font-mono text-sm cursor-pointer transition-colors" title="点击删除">
-              {{ k === ' ' ? 'Space' : k }} &times;
-            </span>
-          </div>
-          <input type="text" placeholder="在此处按下按键绑定..." @keydown.prevent="addNextKey" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
-        </div>
-        <div class="flex-1">
-          <label class="block text-sm text-slate-400 mb-2">上一页 / 上一章</label>
-          <div class="flex items-center gap-2 flex-wrap mb-2">
-            <span v-for="k in prevKeys" :key="k" @click="removePrevKey(k)" class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-red-500/30 hover:text-red-300 font-mono text-sm cursor-pointer transition-colors" title="点击删除">
-              {{ k === ' ' ? 'Space' : k }} &times;
-            </span>
-          </div>
-          <input type="text" placeholder="在此处按下按键绑定..." @keydown.prevent="addPrevKey" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
-        </div>
-      </div>
-    </section>
-
-    <!-- WebDAV Sync -->
-    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
-      <div class="flex items-center gap-3 mb-2"><span class="text-xl">☁️</span><h3 class="text-lg font-bold">WebDAV 进度同步 (兼容阅读)</h3></div>
-      <p class="text-sm text-slate-400">配置 WebDAV 以实现多端无缝同步阅读进度（自动落库到 <code>bookProgress/</code>，完全兼容 Legado 格式）。</p>
-      
-      <div class="space-y-4">
-        <div class="grid grid-cols-[2fr_1fr] gap-4">
-          <div>
-            <label class="block text-sm text-slate-400 mb-2">服务器地址 (需带 http(s) 且以 / 结尾)</label>
-            <input type="text" v-model="webdavUrl" @change="saveWebdav" placeholder="例如: https://dav.jianguoyun.com/dav/" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
-          </div>
-          <div>
-            <label class="block text-sm text-slate-400 mb-2">子文件夹</label>
-            <input type="text" v-model="webdavDir" @change="saveWebdav" placeholder="默认 Books" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-slate-400 mb-2">账号</label>
-            <input type="text" v-model="webdavUser" @change="saveWebdav" placeholder="用户名" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
-          </div>
-          <div>
-            <label class="block text-sm text-slate-400 mb-2">密码 / 应用密码</label>
-            <input type="password" v-model="webdavPass" @change="saveWebdav" placeholder="密码" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
-          </div>
-        </div>
-      </div>
-      <div class="flex items-center justify-between pt-2">
-        <label class="flex items-center gap-3 cursor-pointer select-none">
-          <input type="checkbox" v-model="webdavSync" @change="saveWebdav" class="hidden" />
-          <div class="w-12 h-6 rounded-full transition-colors duration-300 relative border border-white/10" :class="webdavSync ? 'bg-blue-600' : 'bg-white/5'">
-            <div class="absolute w-4 h-4 rounded-full bg-white top-1 transition-transform duration-300 shadow-sm" :class="!webdavSync ? 'left-1' : 'translate-x-6 left-1'"></div>
-          </div>
-          <span class="text-slate-300 text-sm">自动同步阅读进度</span>
-        </label>
+    <!-- 1. 窗口与显示 -->
+    <div class="mb-8">
+      <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">窗口与显示</h3>
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
         
-        <div class="flex items-center gap-4">
-          <span v-if="webdavTestResult" class="text-sm font-bold" :class="webdavTestResult.startsWith('✅') ? 'text-green-400' : 'text-red-400'">{{ webdavTestResult }}</span>
-          <button @click="testWebdav" :disabled="webdavTesting" class="px-5 py-2 glass rounded-xl font-bold transition-all active:scale-95 hover:bg-white/10 disabled:opacity-50">测试连接</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Background -->
-    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
-      <div class="flex items-center gap-3 mb-2"><span class="text-xl">🎨</span><h3 class="text-lg font-bold">阅读背景</h3></div>
-      <div v-if="bgPreview" class="relative w-full h-40 rounded-2xl overflow-hidden border border-white/10">
-        <img :src="bgPreview" class="w-full h-full object-cover" alt="背景预览" @error="bgPreview = ''" />
-        <div class="absolute inset-0 bg-slate-950/40 flex items-center justify-center"><span class="text-sm font-bold opacity-60">背景预览</span></div>
-      </div>
-      <div>
-        <label class="block text-sm text-slate-400 mb-3">背景图片路径</label>
-        <div class="flex gap-3">
-          <input type="text" v-model="bgImage" placeholder="点击浏览选择图片..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all" />
-          <button @click="browseImage" class="px-5 py-2 glass rounded-xl font-bold transition-all active:scale-95 hover:bg-white/10">📂 浏览</button>
-          <button @click="applyBgImage" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-blue-600/20">应用</button>
-        </div>
-        <div v-if="bgImage" class="mt-3">
-          <button @click="clearBgImage" class="text-xs text-red-400 hover:text-red-300 transition-colors">✕ 清除背景</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Replacement Rules -->
-    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
-      <div class="flex items-center gap-3 mb-2"><span class="text-xl">📝</span><h3 class="text-lg font-bold">替换规则管理</h3></div>
-      <p class="text-sm text-slate-400">管理所有替换规则。可在阅读界面中针对单本书或全局添加规则。</p>
-
-      <div class="flex gap-2 mb-4">
-        <button @click="ruleFilter='all'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
-                :class="ruleFilter==='all' ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'">全部 ({{ allRules.length }})</button>
-        <button @click="ruleFilter='global'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
-                :class="ruleFilter==='global' ? 'bg-purple-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'">全局</button>
-        <button @click="ruleFilter='book'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
-                :class="ruleFilter==='book' ? 'bg-sky-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'">特定书籍</button>
-      </div>
-
-      <div v-if="filteredRules().length === 0" class="text-center py-8">
-        <p class="text-slate-500 text-sm">暂无替换规则</p>
-        <p class="text-slate-600 text-xs mt-1">在阅读界面菜单中点击「📝 替换」按钮添加</p>
-      </div>
-
-      <div v-else class="space-y-3">
-        <div v-for="rule in filteredRules()" :key="rule.id"
-             class="flex items-start gap-4 p-4 rounded-xl border transition-all"
-             :class="rule.active ? 'bg-white/3 border-white/8' : 'bg-white/[0.01] border-white/[0.03] opacity-40'">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span class="text-amber-400 font-semibold text-sm break-all">{{ rule.pattern }}</span>
-              <span class="text-white/20 text-xs">→</span>
-              <span class="text-emerald-400 font-semibold text-sm break-all">{{ rule.replacement || '(删除)' }}</span>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded"
-                    :class="rule.scope === 'global' ? 'bg-purple-500/15 text-purple-400' : 'bg-sky-500/15 text-sky-400'">
-                {{ rule.scope === 'global' ? '全局' : '本书' }}
-              </span>
-              <span v-if="rule.scope === 'book' && rule.book_id" class="text-[10px] text-slate-500">
-                📖 {{ getBookTitle(rule.book_id) }}
-              </span>
-              <span v-if="rule.is_regex" class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-400">正则</span>
+        <div class="p-4 hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-start gap-4">
+            <span class="text-xl opacity-80 mt-0.5">🪟</span>
+            <div class="flex-1">
+              <div class="text-[14px] font-medium text-white/90">默认窗口比例</div>
+              <div class="text-[12px] text-white/50 mt-0.5 mb-3">快速调整主阅读窗口的大小特征预设</div>
+              <div class="flex flex-wrap gap-2">
+                <button @click="setAspectRatio(16/9)" class="px-4 py-1.5 bg-black/20 hover:bg-black/40 border border-white/5 hover:border-white/20 rounded-md text-[13px] font-mono transition-colors">16 : 9</button>
+                <button @click="setAspectRatio(9/16)" class="px-4 py-1.5 bg-black/20 hover:bg-black/40 border border-white/5 hover:border-white/20 rounded-md text-[13px] font-mono transition-colors">9 : 16</button>
+                <button @click="setAspectRatio(4/3)" class="px-4 py-1.5 bg-black/20 hover:bg-black/40 border border-white/5 hover:border-white/20 rounded-md text-[13px] font-mono transition-colors">4 : 3</button>
+                <button @click="setAspectRatio(3/4)" class="px-4 py-1.5 bg-black/20 hover:bg-black/40 border border-white/5 hover:border-white/20 rounded-md text-[13px] font-mono transition-colors">3 : 4</button>
+              </div>
             </div>
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <button @click="toggleRuleActive(rule)"
-                    class="px-3 py-1 rounded-lg text-xs font-bold transition-all border"
-                    :class="rule.active ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10' : 'border-white/10 text-slate-500 hover:bg-white/5'">
-              {{ rule.active ? '已启用' : '已禁用' }}
-            </button>
-            <button @click="deleteRule(rule.id)"
-                    class="px-3 py-1 rounded-lg text-xs font-bold text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20">
-              删除
-            </button>
+        </div>
+
+        <div class="p-4 hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-start gap-4">
+            <span class="text-xl opacity-80 mt-0.5">🎨</span>
+            <div class="flex-1">
+              <div class="text-[14px] font-medium text-white/90">跨端阅读背景壁纸</div>
+              <div class="text-[12px] text-white/50 mt-0.5 mb-3">为沉浸阅读模式提供底层墙纸</div>
+              
+              <div class="flex gap-2 mb-3">
+                <input type="text" v-model="bgImage" placeholder="在此键入图片绝对路径..." class="flex-1 bg-black/20 border border-white/10 rounded-md px-3 py-1.5 text-[13px] focus:border-[#005fb8] outline-none transition-colors" />
+                <button @click="browseImage" class="px-4 py-1.5 bg-black/20 hover:bg-black/40 border border-white/5 rounded-md text-[13px] transition-colors">📂 浏览</button>
+                <button @click="applyBgImage" class="px-4 py-1.5 bg-[#005fb8] hover:bg-[#005fb8]/90 text-white rounded-md text-[13px] transition-colors font-medium">应用</button>
+                <button v-if="bgImage" @click="clearBgImage" class="px-4 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-md text-[13px] transition-colors">清除</button>
+              </div>
+              
+              <div v-if="bgPreview" class="relative w-full max-w-sm h-32 rounded-lg overflow-hidden border border-white/10 mt-2">
+                <img :src="bgPreview" class="w-full h-full object-cover" alt="背景预览" @error="bgPreview = ''" />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- Update -->
-    <section class="glass-dark rounded-3xl p-8 border border-white/5 space-y-6">
-      <div class="flex items-center gap-3 mb-2"><span class="text-xl">🔄</span><h3 class="text-lg font-bold">软件更新</h3></div>
-      <p class="text-sm text-slate-400">检查更新。下载并安装后，旧版本安装包会在下次启动时自动清理。</p>
-      <div class="flex items-center gap-4 flex-wrap">
-        <button @click="checkForUpdate" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-blue-600/20">检查更新</button>
-        <template v-if="updateAvailable">
-          <button @click="downloadUpdate" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-indigo-600/20">⏬ 后台下载</button>
-          <button @click="openReleases" class="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all active:scale-95">🌐 浏览器打开</button>
-        </template>
-        <button v-if="updateReady" @click="installNow" class="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-green-600/20">⬇ 立即安装</button>
-        <div v-if="updateStatus">
-          <p class="text-sm font-medium">{{ updateStatus }}</p>
-          <p v-if="updateDetail" class="text-xs text-slate-400 mt-1">{{ updateDetail }}</p>
-        </div>
       </div>
-    </section>
-
-    <!-- Version -->
-    <div class="text-center space-y-2 pt-10">
-      <div class="text-xl font-black italic tracking-tighter text-white/20">ELE READER</div>
-      <p class="text-xs text-slate-600">Version {{ appVersion }}</p>
     </div>
+
+    <!-- 2. 阅读交互 -->
+    <div class="mb-8">
+      <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">阅读交互</h3>
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+        
+        <div class="flex items-center justify-between p-4 hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-center gap-4">
+            <span class="text-xl opacity-80">💡</span>
+            <div>
+              <div class="text-[14px] font-medium text-white/90">显示操作浮层提示</div>
+              <div class="text-[12px] text-white/50 mt-0.5">进入阅读页时屏幕底部会浮现操作引导帮助</div>
+            </div>
+          </div>
+          <label class="flex items-center cursor-pointer relative">
+            <input type="checkbox" v-model="showKeyHints" @change="toggleKeyHints" class="peer sr-only" />
+            <div class="w-10 h-5 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-white/10 peer-checked:border-[#005fb8]"></div>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-between p-4 hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-center gap-4">
+            <span class="text-xl opacity-80">🚀</span>
+            <div>
+              <div class="text-[14px] font-medium text-white/90">启动直达续读</div>
+              <div class="text-[12px] text-white/50 mt-0.5">打开软件直接跳入上次阅读的书籍而不在书架层停留</div>
+            </div>
+          </div>
+          <label class="flex items-center cursor-pointer relative">
+            <input type="checkbox" v-model="autoOpenLastRead" @change="toggleAutoOpenLastRead" class="peer sr-only" />
+            <div class="w-10 h-5 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-white/10 peer-checked:border-[#005fb8]"></div>
+          </label>
+        </div>
+
+        <div class="p-4 hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-start gap-4">
+            <span class="text-xl opacity-80 mt-0.5">⌨️</span>
+            <div class="flex-1">
+              <div class="text-[14px] font-medium text-white/90">翻页按键绑定</div>
+              <div class="text-[12px] text-white/50 mt-0.5 mb-3">自定义全局控制按键组合（点击下方已绑按键可移除）</div>
+              <div class="grid grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-[12px] text-white/60 mb-2 font-medium">下一页 / 下一章绑定</label>
+                  <div class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                    <span v-for="k in nextKeys" :key="k" @click="removeNextKey(k)" class="px-2 py-0.5 bg-[#005fb8]/20 border border-[#005fb8]/30 text-[#60a5fa] rounded text-[11px] font-mono cursor-pointer hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-400 transition-colors">
+                      {{ k === ' ' ? 'Space' : k }} &times;
+                    </span>
+                  </div>
+                  <input type="text" placeholder="按下按键录入..." @keydown.prevent="addNextKey" class="w-full bg-black/20 border border-white/10 rounded-md px-3 py-1.5 text-[12px] focus:border-[#005fb8] outline-none transition-colors" />
+                </div>
+                <div>
+                  <label class="block text-[12px] text-white/60 mb-2 font-medium">上一页 / 上一章绑定</label>
+                  <div class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                    <span v-for="k in prevKeys" :key="k" @click="removePrevKey(k)" class="px-2 py-0.5 bg-[#005fb8]/20 border border-[#005fb8]/30 text-[#60a5fa] rounded text-[11px] font-mono cursor-pointer hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-400 transition-colors">
+                      {{ k === ' ' ? 'Space' : k }} &times;
+                    </span>
+                  </div>
+                  <input type="text" placeholder="按下按键录入..." @keydown.prevent="addPrevKey" class="w-full bg-black/20 border border-white/10 rounded-md px-3 py-1.5 text-[12px] focus:border-[#005fb8] outline-none transition-colors" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 3. WebDAV -->
+    <div class="mb-8">
+      <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">云同步驱动</h3>
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+        
+        <div class="p-4 hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-start gap-4">
+            <span class="text-xl opacity-80 mt-0.5">☁️</span>
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <div class="text-[14px] font-medium text-white/90">WebDAV 进度同步桥接</div>
+                  <div class="text-[12px] text-white/50 mt-0.5">完美兼容 Legado 数据簇的终端互转</div>
+                </div>
+                <label class="flex items-center cursor-pointer relative">
+                  <input type="checkbox" v-model="webdavSync" @change="saveWebdav" class="peer sr-only" />
+                  <div class="w-10 h-5 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-white/10 peer-checked:border-[#005fb8]"></div>
+                </label>
+              </div>
+
+              <div class="space-y-3 bg-black/10 p-4 rounded-lg border border-white/5">
+                <div class="grid grid-cols-[2fr_1fr] gap-3">
+                  <div>
+                    <label class="block text-[11px] text-white/50 mb-1">主线服务器 URL (需尾随 /)</label>
+                    <input type="text" v-model="webdavUrl" @change="saveWebdav" placeholder="https://dav.jianguoyun.com/dav/" class="w-full bg-black/30 border border-white/10 rounded-md px-3 py-1.5 text-[12px] focus:border-[#005fb8] outline-none transition-colors" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] text-white/50 mb-1">子目录 (例如 Books)</label>
+                    <input type="text" v-model="webdavDir" @change="saveWebdav" placeholder="Books" class="w-full bg-black/30 border border-white/10 rounded-md px-3 py-1.5 text-[12px] focus:border-[#005fb8] outline-none transition-colors" />
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] text-white/50 mb-1">认证账户 (User)</label>
+                    <input type="text" v-model="webdavUser" @change="saveWebdav" placeholder="example@email.com" class="w-full bg-black/30 border border-white/10 rounded-md px-3 py-1.5 text-[12px] focus:border-[#005fb8] outline-none transition-colors" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] text-white/50 mb-1">连接密钥 (App Password)</label>
+                    <input type="password" v-model="webdavPass" @change="saveWebdav" placeholder="••••••••" class="w-full bg-black/30 border border-white/10 rounded-md px-3 py-1.5 text-[12px] focus:border-[#005fb8] outline-none transition-colors" />
+                  </div>
+                </div>
+                <div class="flex items-center justify-between pt-2 border-t border-white/[0.05] mt-3">
+                  <span class="text-[12px] min-h-[18px]" :class="webdavTestResult.includes('✅') ? 'text-emerald-400' : 'text-red-400'">{{ webdavTestResult }}</span>
+                  <button @click="testWebdav" :disabled="webdavTesting" class="px-4 py-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-md text-[12px] transition-colors font-medium border border-white/5">探测网络</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 4. 正则清洗 -->
+    <div class="mb-8">
+      <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">内容处理 (正则过滤)</h3>
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-white/[0.04]">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[13px] text-white/60">在阅读界面中添加用于文字净化的替换规则，在此处可以浏览并控制全部规则启用状态。</p>
+            <div class="flex bg-black/20 rounded-md p-0.5 border border-white/5">
+              <button @click="ruleFilter='all'" class="px-3 py-1 rounded text-[11px] font-medium transition-colors" :class="ruleFilter==='all' ? 'bg-white/10 text-white shadow-sm' : 'text-white/50 hover:text-white'">全部</button>
+              <button @click="ruleFilter='global'" class="px-3 py-1 rounded text-[11px] font-medium transition-colors" :class="ruleFilter==='global' ? 'bg-white/10 text-white shadow-sm' : 'text-white/50 hover:text-white'">全局级</button>
+              <button @click="ruleFilter='book'" class="px-3 py-1 rounded text-[11px] font-medium transition-colors" :class="ruleFilter==='book' ? 'bg-white/10 text-white shadow-sm' : 'text-white/50 hover:text-white'">单书级</button>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="filteredRules().length === 0" class="py-12 flex flex-col items-center justify-center bg-black/10">
+          <span class="text-3xl opacity-30 mb-2">📝</span>
+          <p class="text-[12px] text-white/40">空无一物，规则大本营闲置中</p>
+        </div>
+
+        <div v-else class="divide-y divide-white/[0.04] bg-black/10">
+          <div v-for="rule in filteredRules()" :key="rule.id" class="p-3 mx-2 my-2 rounded-lg border border-transparent hover:border-white/5 hover:bg-white/[0.02] flex items-center justify-between group transition-colors" :class="rule.active ? '' : 'opacity-50'">
+            <div class="flex-1 min-w-0 pr-4">
+              <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span class="text-amber-300 font-mono text-[12px] bg-amber-900/20 px-1.5 py-0.5 rounded break-all">{{ rule.pattern }}</span>
+                <span class="text-white/30 text-xs">→</span>
+                <span class="text-emerald-300 font-mono text-[12px] bg-emerald-900/20 px-1.5 py-0.5 rounded break-all">{{ rule.replacement || '(删除)' }}</span>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-bold px-1.5 py-[1px] rounded" :class="rule.scope === 'global' ? 'bg-purple-500/10 text-purple-400' : 'bg-sky-500/10 text-sky-400'">{{ rule.scope === 'global' ? '全局模式' : '专属模式' }}</span>
+                <span v-if="rule.scope === 'book' && rule.book_id" class="text-[10px] text-white/40 max-w-[120px] truncate">#{{ getBookTitle(rule.book_id) }}</span>
+                <span v-if="rule.is_regex" class="text-[10px] uppercase font-bold text-amber-400/80 px-1.5 py-[1px] bg-amber-500/10 rounded">Regex</span>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button @click="toggleRuleActive(rule)" class="px-2.5 py-1 text-[11px] font-medium border rounded transition-colors" :class="rule.active ? 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10' : 'border-white/20 text-white/60 hover:bg-white/10'">{{ rule.active ? '冻结' : '唤醒' }}</button>
+              <button @click="deleteRule(rule.id)" class="px-2.5 py-1 text-[11px] font-medium border border-red-500/30 text-red-400 rounded hover:bg-red-500/10 transition-colors">废弃</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. 关于 -->
+    <div class="mb-4">
+      <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">关于系统</h3>
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+        <div class="flex items-center justify-between p-4 hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-center gap-4">
+            <span class="text-xl opacity-80">🔄</span>
+            <div>
+              <div class="text-[14px] font-medium text-white/90">EleWinReader 更新维护</div>
+              <div class="text-[12px] text-white/50 mt-0.5 mb-1" v-if="!updateStatus">版定号 v{{ appVersion }}</div>
+              <div v-if="updateStatus" class="text-[12px] text-emerald-400">{{ updateStatus }} <span class="text-white/40">{{ updateDetail }}</span></div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <template v-if="updateAvailable">
+              <button @click="downloadUpdate" class="px-4 py-1.5 bg-[#005fb8] hover:bg-[#005fb8]/90 text-white rounded-md text-[13px] transition-colors font-medium">后台下载最新版</button>
+              <button @click="openReleases" class="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-md text-[13px] transition-colors font-medium border border-white/5">前往 GitHub</button>
+            </template>
+            <button v-else-if="updateReady" @click="installNow" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-[13px] transition-colors font-medium shadow-sm">部署并重启更新</button>
+            <button v-else @click="checkForUpdate" class="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-md text-[13px] transition-colors font-medium border border-white/5">联网校验新档</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
