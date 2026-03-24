@@ -21,6 +21,7 @@ export interface ElectronAPI {
   win: {
     setAspectRatio: (ratio: number) => Promise<void>
     setFullScreen: (isFull: boolean) => Promise<void>
+    setControlsVisible: (visible: boolean) => Promise<void>
   }
   font: {
     getSystemFonts: () => Promise<string[]>

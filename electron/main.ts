@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } from 'electron'
 import { join, extname } from 'path'
 import { is } from '@electron-toolkit/utils'
 import initSqlJs, { Database } from 'sql.js'
@@ -208,16 +208,6 @@ async function initDatabase(): Promise<void> {
     }
   } catch(_) {}
 
-  saveDatabase()
-}
-
-app.whenReady().then(async () => {
-  createWindow()
-  try {
-    await initDatabase()
-    console.log('Database initialized successfully')
-  } catch (error) {
-    console.error('Database init failed:', error)
     dialog.showErrorBox('数据库初始化失败', String(error))
   }
   setupAutoUpdater()

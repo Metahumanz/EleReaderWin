@@ -60,6 +60,7 @@ const carouselPos = ref(0)
 const prevPageCount = ref(1)
 const tocListRef = ref<HTMLElement | null>(null)
 const suppressAnim = ref(false) // suppress translateX transition during chapter switch
+const showNatControls = ref(false)
 
 
 let flipLock = false
@@ -662,7 +663,16 @@ const downloadProgressFromWebdav = async () => {
   } catch (e) { console.error('WebDAV download err:', e) }
 }
 
+const handleReaderMouseMove = (e: MouseEvent) => {
+  const inCorner = e.clientX > window.innerWidth - 180 && e.clientY < 50
+  if (showNatControls.value !== inCorner) {
+    showNatControls.value = inCorner
+    window.electronAPI.win.setControlsVisible(inCorner)
+  }
+}
+
 onMounted(async () => {
+  window.electronAPI.win.setControlsVisible(false)
   await loadSettings(); await fetchBook(); await fetchChapters(); await fetchRules()
   await downloadProgressFromWebdav()
   loading.value = false
@@ -671,6 +681,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
 })
 onUnmounted(() => {
+  window.electronAPI.win.setControlsVisible(true)
   saveProgress()
   window.removeEventListener('resize', recalc)
   window.removeEventListener('keydown', handleKeydown)
@@ -678,7 +689,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="reader-root" @wheel="handleWheel" @click="handleClick" @contextmenu.prevent="handleContextMenu">
+  <div class="reader-root" @wheel="handleWheel" @click="handleClick" @contextmenu.prevent="handleContextMenu" @mousemove="handleReaderMouseMove">
+    <!-- Hover Native Controls Animation layer -->
+    <div class="fixed top-0 right-0 w-[180px] h-[50px] z-[9999] pointer-events-none transition-all duration-300" :class="showNatControls ? 'opacity-100' : 'opacity-0'" style="-webkit-app-region: no-drag;">
+      <div class="absolute inset-0 bg-gradient-to-l from-white/10 to-transparent backdrop-blur-[2px]"></div>
+    </div>
+
     <!-- Separate background layer to allow blurring without blurring text -->
     <div class="fixed inset-0 pointer-events-none transition-all duration-300 transform-gpu origin-center" 
          :style="[readerBgStyle, { filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none', transform: blurAmount > 0 ? 'scale(1.1)' : 'none' }]"
