@@ -20,6 +20,7 @@ const updateStatus = ref('')
 const updateDetail = ref('')
 const updateAvailable = ref(false)
 const updateReady = ref(false)
+const autoOpenLastRead = ref(false)
 
 const webdavUrl = ref('')
 const webdavDir = ref('Books')
@@ -47,6 +48,7 @@ const loadSettings = async () => {
       if (s.key === 'webdavUser') webdavUser.value = s.value
       if (s.key === 'webdavPass') webdavPass.value = s.value
       if (s.key === 'webdavSync') webdavSync.value = s.value === 'true'
+      if (s.key === 'autoOpenLastRead') autoOpenLastRead.value = s.value === 'true'
     }
   } catch (e) { console.error(e) }
 }
@@ -118,6 +120,10 @@ const testWebdav = async () => {
 
 const toggleKeyHints = async () => {
   await saveSetting('hideKeyHints', (!showKeyHints.value).toString())
+}
+
+const toggleAutoOpenLastRead = async () => {
+  await saveSetting('autoOpenLastRead', autoOpenLastRead.value ? 'true' : 'false')
 }
 
 const addNextKey = (e: KeyboardEvent) => {
@@ -261,6 +267,15 @@ onMounted(async () => {
         <span class="text-slate-300 text-sm">显示快捷键与操作提示</span>
       </label>
       <p class="text-xs text-slate-500 mt-1 pl-[3.75rem]">开启后，进入阅读界面时将显示快捷键操作指南。</p>
+
+      <label class="flex items-center gap-3 cursor-pointer select-none">
+        <input type="checkbox" v-model="autoOpenLastRead" @change="toggleAutoOpenLastRead" class="hidden" />
+        <div class="w-12 h-6 rounded-full transition-colors duration-300 relative border border-white/10" :class="autoOpenLastRead ? 'bg-blue-600' : 'bg-white/5'">
+          <div class="absolute w-4 h-4 rounded-full bg-white top-1 transition-transform duration-300 shadow-sm" :class="!autoOpenLastRead ? 'left-1' : 'translate-x-6 left-1'"></div>
+        </div>
+        <span class="text-slate-300 text-sm">启动直达续读</span>
+      </label>
+      <p class="text-xs text-slate-500 mt-1 pl-[3.75rem]">开启后，打开软件直接进入上次阅读的书籍，不再停留于书架。</p>
     </section>
 
     <!-- Key Bindings -->

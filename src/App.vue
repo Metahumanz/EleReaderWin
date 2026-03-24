@@ -54,8 +54,18 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
 const cancelQuit = () => { showQuitConfirm.value = false }
 const confirmQuit = () => { window.electronAPI.app.quit() }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  try {
+    const s = await window.electronAPI.db.query("SELECT value FROM settings WHERE key = 'autoOpenLastRead'")
+    if (s[0] && s[0].value === 'true') {
+      const b = await window.electronAPI.db.query("SELECT id FROM books ORDER BY last_read DESC LIMIT 1")
+      if (b[0] && b[0].id) {
+        selectedBookId.value = b[0].id
+        currentView.value = 'reader'
+      }
+    }
+  } catch (e) {}
 })
 
 onUnmounted(() => {

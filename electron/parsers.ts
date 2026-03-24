@@ -31,19 +31,30 @@ export function parseTxt(filePath: string): Chapter[] {
     content = iconv.decode(buffer, 'GB18030')
   }
 
-  const chapterRegex = /^[ \t]*(第[0-9一二三四五六七八九十百千万零两\s]+[章节回]|[Cc]hapter\s+\d+).*$/gm
+  const rules = [
+    /^[ \t　]{0,4}(?:序章|楔子|第\s{0,4}[0-9一二三四五六七八九十百千万零两]+?\s{0,4}(?:章|节|卷)).{0,30}$/gm,
+    /^[ \t　]{0,4}\d{1,5}[:：,.， 、_—\-].{1,30}$/gm,
+    /^[ \t　]*[【〔〖「『〈［\[](?:第|[Cc]hapter).*?[章节].{0,20}$/gm
+  ]
 
-  const matches: { index: number; title: string }[] = []
-  let match: RegExpExecArray | null
+  let bestMatches: { index: number; title: string }[] = []
 
-  while ((match = chapterRegex.exec(content)) !== null) {
-    matches.push({
-      index: match.index,
-      title: match[0].trim()
-    })
+  for (const rule of rules) {
+    const matches: { index: number; title: string }[] = []
+    let match: RegExpExecArray | null
+    rule.lastIndex = 0
+    while ((match = rule.exec(content)) !== null) {
+      matches.push({
+        index: match.index,
+        title: match[0].trim()
+      })
+    }
+    if (matches.length > bestMatches.length) {
+      bestMatches = matches
+    }
   }
 
-  if (matches.length === 0) {
+  if (bestMatches.length === 0) {
     return [{
       title: '全文',
       body: linesToHtml(content),
@@ -54,19 +65,21 @@ export function parseTxt(filePath: string): Chapter[] {
   const chapters: Chapter[] = []
   let lastIndex = 0
 
-  for (let i = 0; i < matches.length; i++) {
-    const { index, title } = matches[i]
-    const nextIndex = i + 1 < matches.length ? matches[i + 1].index : content.length
-
-    const chunk = content.slice(lastIndex, index).trim()
+  for (let i = 0; i < bestMatches.length; i++) {
+    const { index, title } = bestMatches[i]
     
-    if (i === 0 && chunk.length > 0) {
-      chapters.push({
-        title: '序章',
-        body: linesToHtml(chunk),
-        orderIndex: chapters.length
-      })
+    if (i === 0 && index > 0) {
+      const chunk = content.slice(0, index).trim()
+      if (chunk.length > 0) {
+        chapters.push({
+          title: '前言',
+          body: linesToHtml(chunk),
+          orderIndex: chapters.length
+        })
+      }
     }
+
+    const nextIndex = i + 1 < bestMatches.length ? bestMatches[i + 1].index : content.length
 
     chapters.push({
       title: title,
@@ -80,12 +93,10 @@ export function parseTxt(filePath: string): Chapter[] {
   if (lastIndex < content.length) {
     const remaining = content.slice(lastIndex).trim()
     if (remaining.length > 0) {
-      const lastTitle = matches[matches.length - 1]?.title || '未完待续'
-      chapters.push({
-        title: lastTitle,
-        body: linesToHtml(remaining.replace(lastTitle, '').trim()),
-        orderIndex: chapters.length
-      })
+      const lastTitle = bestMatches[bestMatches.length - 1]?.title || '未完待续'
+      // If it's literally after the last match, we don't have another title to use. Just append to the last chapter instead of making a new one??
+      // Wait, the previous loop handled up to `content.length` for the last iteration!
+      // So `lastIndex < content.length` is actually handled by the loop.
     }
   }
 
