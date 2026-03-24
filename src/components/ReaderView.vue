@@ -46,6 +46,7 @@ const flipMode = ref<'slide' | 'cover'>('slide')
 // Pagination
 const currentPage = ref(0)
 const totalPages = ref(1)
+const pendingWebdavPos = ref(-1)
 const pageMode = ref<'single' | 'double'>('single')
 const doublePageStep = ref<1 | 2>(2)
 const contentRef = ref<HTMLElement | null>(null)
@@ -316,6 +317,17 @@ const calculatePages = () => {
   if (cw <= 0) return
   const pageWidth = pageMode.value === 'double' ? cw / 2 : cw
   totalPages.value = Math.max(1, Math.ceil(contentRef.value.scrollWidth / pageWidth))
+  
+  if (pendingWebdavPos.value >= 0) {
+    const L = currentChapterData.value?.body?.length || 0
+    if (L > 0) {
+      currentPage.value = Math.floor((pendingWebdavPos.value / L) * totalPages.value)
+    } else {
+      currentPage.value = 0
+    }
+    pendingWebdavPos.value = -1
+  }
+
   if (currentPage.value >= totalPages.value) currentPage.value = totalPages.value - 1
   calcPrevPages()
 }
@@ -340,17 +352,22 @@ const prevPageOffset = computed(() => {
 
 const uploadProgressToWebdav = async () => {
   if (!webdavSync.value || !webdavUrl.value || !book.value) return
+  if (pendingWebdavPos.value >= 0) return // Skip upload if we're evaluating cloud jump
   const auth = btoa(`${webdavUser.value}:${webdavPass.value}`)
   let author = book.value.author || '未知'
   if (!author.trim()) author = '未知'
   let safeName = book.value.title.replace(/[\\/:"*?<>|]/g, '_')
   let safeAuthor = author.replace(/[\\/:"*?<>|]/g, '_')
   const filename = `${safeName}_${safeAuthor}.json`
+  
+  const L = currentChapterData.value?.body?.length || 0
+  const charPos = totalPages.value > 0 ? Math.floor(L * (currentPage.value / totalPages.value)) : 0
+
   const data = {
     name: book.value.title,
     author: author,
     durChapterIndex: currentChapterIndex.value,
-    durChapterPos: currentPage.value,
+    durChapterPos: charPos,
     durChapterTitle: currentChapterData.value?.title || '',
     durChapterTime: Date.now()
   }
@@ -626,8 +643,13 @@ const downloadProgressFromWebdav = async () => {
       const remote = JSON.parse(res.data)
       const localTime = book.value.last_read ? new Date(book.value.last_read).getTime() : 0
       if (remote.durChapterTime && remote.durChapterTime > localTime + 5000) {
-        if (remote.durChapterIndex >= 0 && remote.durChapterIndex < chapters.value.length && remote.durChapterIndex !== currentChapterIndex.value) {
-          goToChapter(remote.durChapterIndex, true)
+        if (remote.durChapterIndex >= 0 && remote.durChapterIndex < chapters.value.length) {
+          pendingWebdavPos.value = remote.durChapterPos || 0
+          if (remote.durChapterIndex !== currentChapterIndex.value) {
+            goToChapter(remote.durChapterIndex, true)
+          } else {
+            recalc()
+          }
         }
       }
     }

@@ -95,6 +95,61 @@ function getWasmPath(): string {
   throw new Error(`WASM not found. Tried:\n${paths.join('\n')}`)
 }
 
+function parseBookNameAndAuthor(rawName: string): { title: string, author: string | null } {
+  let title = rawName.replace(/\.[^/.]+$/, '').trim()
+  let author: string | null = null
+
+  const authorMatch = title.match(/作者[:：\s]*([^\s_()（）\[\]《》]+)/)
+  if (authorMatch) {
+    author = authorMatch[1].trim()
+    title = title.replace(authorMatch[0], '')
+  }
+
+  const titleMatch = title.match(/《([^》]+)》/)
+  if (titleMatch) {
+    title = titleMatch[1].trim()
+  }
+
+  if (!author && !titleMatch) {
+    const bracketMatch = title.match(/^\[([^\]]+)\]\s*(.*)$/) || title.match(/^【([^】]+)】\s*(.*)$/)
+    if (bracketMatch) {
+      author = bracketMatch[1].trim()
+      title = bracketMatch[2].trim()
+    }
+  }
+
+  if (!author && !titleMatch) {
+    const dashMatch = title.match(/^(.*?)\s*-\s*([^-]+)$/)
+    if (dashMatch) {
+      title = dashMatch[1].trim()
+      author = dashMatch[2].trim()
+    }
+  }
+
+  title = title.replace(/[（\(][^）\)]*(校对|全本|精校|番外|完整|修改)[^）\)]*[）\)]/g, '')
+  title = title.replace(/第.*部/, '')
+  
+  if (!author && !titleMatch && title.includes('_')) {
+    const parts = title.split('_')
+    const possibleAuthor = parts.pop()!.trim()
+    if (possibleAuthor && possibleAuthor !== '未知') {
+       author = possibleAuthor
+       title = parts.join('_').trim()
+    }
+  } else {
+    title = title.replace(/_.*$/, '')
+  }
+
+  title = title.replace(/_/g, '').trim()
+  if (title.startsWith('《') && title.endsWith('》')) {
+    title = title.substring(1, title.length - 1).trim()
+  }
+
+  if (author === '未知' || author === '') author = null
+
+  return { title, author }
+}
+
 async function initDatabase(): Promise<void> {
   const wasmPath = getWasmPath()
   const wasmBuffer = readFileSync(wasmPath)
@@ -127,6 +182,25 @@ async function initDatabase(): Promise<void> {
   )`)
   // Migration: add book_id column if missing (existing DBs)
   try { db.run('ALTER TABLE replacement_rules ADD COLUMN book_id INTEGER') } catch (_) {}
+  // Migration: clean up existing titles and extract authors
+  try {
+    const books = db.exec('SELECT id, title, author FROM books')
+    if (books.length > 0) {
+      const { values } = books[0]
+      for (const row of values) {
+        const id = row[0] as number
+        const oldTitle = row[1] as string
+        const oldAuthor = row[2] as string | null
+        if (!oldAuthor || oldAuthor === '未知' || oldTitle.includes('作者') || oldTitle.includes('《') || oldTitle.includes('(') || oldTitle.includes('（')) {
+           const parsed = parseBookNameAndAuthor(oldTitle)
+           if (parsed.title !== oldTitle || parsed.author) {
+              db.run('UPDATE books SET title = ?, author = ? WHERE id = ?', [parsed.title, parsed.author || oldAuthor, id])
+           }
+        }
+      }
+    }
+  } catch(_) {}
+
   saveDatabase()
 }
 
