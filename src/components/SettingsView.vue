@@ -245,7 +245,7 @@ onMounted(async () => {
     <!-- 1. 窗口与显示 -->
     <div class="mb-8">
       <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">窗口与显示</h3>
-      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-400 divide-y divide-white/[0.04]">
         
         <div class="p-4 hover:bg-white/[0.01] transition-colors">
           <div class="flex items-start gap-4">
@@ -290,7 +290,7 @@ onMounted(async () => {
     <!-- 2. 阅读交互 -->
     <div class="mb-8">
       <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">阅读交互</h3>
-      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-400 divide-y divide-white/[0.04]">
         
         <div class="flex items-center justify-between p-4 hover:bg-white/[0.01] transition-colors">
           <div class="flex items-center gap-4">
@@ -356,7 +356,7 @@ onMounted(async () => {
     <!-- 3. WebDAV -->
     <div class="mb-8">
       <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">云同步驱动</h3>
-      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-400 divide-y divide-white/[0.04]">
         
         <div class="p-4 hover:bg-white/[0.01] transition-colors">
           <div class="flex items-start gap-4">
@@ -409,7 +409,7 @@ onMounted(async () => {
     <!-- 4. 正则清洗 -->
     <div class="mb-8">
       <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">内容处理 (正则过滤)</h3>
-      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm overflow-hidden">
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-400 overflow-hidden">
         <div class="p-4 border-b border-white/[0.04]">
           <div class="flex items-center justify-between mb-3">
             <p class="text-[13px] text-white/60">在阅读界面中添加用于文字净化的替换规则，在此处可以浏览并控制全部规则启用状态。</p>
@@ -453,7 +453,7 @@ onMounted(async () => {
     <!-- 5. 关于 -->
     <div class="mb-4">
       <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">关于系统</h3>
-      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-400 divide-y divide-white/[0.04]">
         <div class="flex items-center justify-between p-4 hover:bg-white/[0.01] transition-colors">
           <div class="flex items-center gap-4">
             <span class="text-xl opacity-80">🔄</span>

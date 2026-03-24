@@ -56,6 +56,13 @@ function createWindow(): void {
     minHeight: 300,
     show: false,
     autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#00000000',
+      symbolColor: '#ffffff',
+      height: 38
+    },
+    backgroundMaterial: process.platform === 'win32' ? 'mica' : 'none',
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       sandbox: false,
