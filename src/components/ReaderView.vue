@@ -364,12 +364,12 @@ const uploadProgressToWebdav = async () => {
   const charPos = totalPages.value > 0 ? Math.floor(L * (currentPage.value / totalPages.value)) : 0
 
   const data = {
-    name: book.value.title,
     author: author,
     durChapterIndex: currentChapterIndex.value,
     durChapterPos: charPos,
+    durChapterTime: Date.now(),
     durChapterTitle: currentChapterData.value?.title || '',
-    durChapterTime: Date.now()
+    name: book.value.title
   }
   let baseURL = webdavUrl.value
   if (webdavDir.value) baseURL += webdavDir.value
@@ -377,7 +377,7 @@ const uploadProgressToWebdav = async () => {
     url: baseURL + 'bookProgress/' + encodeURIComponent(filename),
     method: 'PUT',
     headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+    body: JSON.stringify(data, null, 2)
   }).catch(e => console.error('WebDAV upload err:', e))
 }
 
