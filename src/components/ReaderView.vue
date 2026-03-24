@@ -350,35 +350,40 @@ const prevPageOffset = computed(() => {
   return `-${Math.max(0, prevPageCount.value - 1) * pageWidth}px`
 })
 
+let uploadTimer: any = null
 const uploadProgressToWebdav = async () => {
   if (!webdavSync.value || !webdavUrl.value || !book.value) return
   if (pendingWebdavPos.value >= 0) return // Skip upload if we're evaluating cloud jump
-  const auth = btoa(`${webdavUser.value}:${webdavPass.value}`)
-  let author = book.value.author || '未知'
-  if (!author.trim()) author = '未知'
-  let safeName = book.value.title.replace(/[\\/:"*?<>|]/g, '_')
-  let safeAuthor = author.replace(/[\\/:"*?<>|]/g, '_')
-  const filename = `${safeName}_${safeAuthor}.json`
   
-  const L = currentChapterData.value?.body?.length || 0
-  const charPos = totalPages.value > 0 ? Math.floor(L * (currentPage.value / totalPages.value)) : 0
+  if (uploadTimer) clearTimeout(uploadTimer)
+  uploadTimer = setTimeout(async () => {
+    const auth = btoa(`${webdavUser.value}:${webdavPass.value}`)
+    let author = book.value?.author || '未知'
+    if (!author.trim()) author = '未知'
+    let safeName = book.value?.title.replace(/[\\/:"*?<>|]/g, '_') || 'Unknown'
+    let safeAuthor = author.replace(/[\\/:"*?<>|]/g, '_')
+    const filename = `${safeName}_${safeAuthor}.json`
+    
+    const L = currentChapterData.value?.body?.length || 0
+    const charPos = totalPages.value > 0 ? Math.floor(L * (currentPage.value / totalPages.value)) : 0
 
-  const data = {
-    author: author,
-    durChapterIndex: currentChapterIndex.value,
-    durChapterPos: charPos,
-    durChapterTime: Date.now(),
-    durChapterTitle: currentChapterData.value?.title || '',
-    name: book.value.title
-  }
-  let baseURL = webdavUrl.value
-  if (webdavDir.value) baseURL += webdavDir.value
-  window.electronAPI.webdav.request({
-    url: baseURL + 'bookProgress/' + encodeURIComponent(filename),
-    method: 'PUT',
-    headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data, null, 2)
-  }).catch(e => console.error('WebDAV upload err:', e))
+    const data = {
+      author: author,
+      durChapterIndex: currentChapterIndex.value,
+      durChapterPos: charPos,
+      durChapterTime: Date.now(),
+      durChapterTitle: currentChapterData.value?.title || '',
+      name: book.value?.title || 'Unknown'
+    }
+    let baseURL = webdavUrl.value
+    if (webdavDir.value) baseURL += webdavDir.value
+    window.electronAPI.webdav.request({
+      url: baseURL + 'bookProgress/' + encodeURIComponent(filename),
+      method: 'PUT',
+      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(data, null, 2)
+    }).catch(e => console.error('WebDAV upload err:', e))
+  }, 2000)
 }
 
 const saveProgress = async () => {
@@ -642,7 +647,8 @@ const downloadProgressFromWebdav = async () => {
     if (res.status === 200 && res.data) {
       const remote = JSON.parse(res.data)
       const localTime = book.value.last_read ? new Date(book.value.last_read).getTime() : 0
-      if (remote.durChapterTime && remote.durChapterTime > localTime + 5000) {
+      const isLocalFresh = currentChapterIndex.value === 0 && currentPage.value === 0
+      if (remote.durChapterTime && (remote.durChapterTime > localTime + 5000 || isLocalFresh)) {
         if (remote.durChapterIndex >= 0 && remote.durChapterIndex < chapters.value.length) {
           pendingWebdavPos.value = remote.durChapterPos || 0
           if (remote.durChapterIndex !== currentChapterIndex.value) {
