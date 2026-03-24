@@ -1,41 +1,50 @@
 # EleWinReader
 
-一个基于 Electron + Vue 构建的高颜值、现代化桌面电子书阅读器。
+> 一个基于 Windows 11 Fluent Design (WinUI 3) 哲学构建的极致桌面阅读器。
 
-## 🌟 核心特性
+EleWinReader 不仅仅是一个电子书阅读器，它是美学、速度与深度同步的完美融合。我们采用了 Windows 11 原生的 **Mica (云母)** 材质，为您带来最具系统沉浸感的阅读体验，同时在底层复刻了 **阅读 (Legado)** 的核心同步与解析引擎，让您的阅读跨越设备，永不断连。
 
-- **极致阅读体验**：支持沉浸式边框模式、横向翻页对齐、鼠标滚轮翻页、文字两端/底部对齐。
-- **高自由度定制**：动态调整字体大小、行高、字间距、内容宽度，支持自定义背景图片与主题。
-- **Legado 级同步**：支持 WebDAV 云端同步，完全兼容 **阅读 (Legado)** 的 `bookProgress` 格式。
-  - **智能解析**：自动从文件名清洗书名与作者，解决对账难题。
-  - **子文件夹支持**：完美对齐 Legado 默认的 `Books/` 存储路径。
-  - **位置精算**：支持字符级偏移量（durChapterPos）与分页进度的无缝换算。
-- **本地增强**：TXT/EPUB 智能章节拆分（强化了对“卷X/第X卷”式标题的容错捕获）、正则内容替换、全文搜索。
-- **现代化架构设计**：采用完全系统级的 **WinUI 3 (Windows 11 Mica)** 云母渲染发丝级质感材质设计，搭载带状态过渡特效的无边框可折叠导航侧边栏框架。书架大厅更加入秒搜过滤器和三大布局形态（网格/列表/大卡片）无缝切换！更有专署『排版实验室』全局把控视界。
+## ✨ 视觉盛宴：原生云母与流体设计
 
-## 🛠️ 技术栈
+*   **真正的云母材质 (Native Mica)**：窗口底漆直接穿透至系统桌面，随窗口聚焦状态与壁纸色彩变幻呈现发丝级质感。
+*   **沉浸式隐藏边框**：摒弃传统标题栏，采用自定义 TitleBar Overlay 技术，将控制权还给内容。
+*   **流体侧边导航**：支持实时动画折叠的汉堡包菜单，在简洁图标与详实文字间自如切换。
+*   **重力感交互**：全站卡片与按钮均具备立体悬停位移及动态扩散阴影，响应触碰的每一次律动。
 
-- **Frontend**: Vue 3 + Tailwind CSS + Vite
-- **Backend**: Electron + better-sqlite3
-- **Database**: SQLite
-- **UI Components**: 自定义高保真组件，支持毛玻璃特效与流畅动画。
+## ⚙️ 核心战力：Legado 级深度对齐
 
-## 🚀 快速开始
+*   **WebDAV 毫秒级同步**：完全兼容 Legado 的 `bookProgress` 格式及 `durChapterPos` 位移，实现跨端无缝接力。
+*   **智能分章算法**：内置三向正则探测集，完美捕获“卷X”、“第X卷”等复杂标题，章节对齐成功率极高。
+*   **全能排版实验室**：
+    *   **实时预览窗**：同步映射真实阅读背景与主题设定。
+    *   **精细控制**：涵盖字号、行高、段前/后间距、首行缩进等 10+ 项核心排版参数。
+*   **多态书架大厅**：支持网格平铺、直列清单、大图图标三种视图，配合毫秒级瞬时搜索过滤。
 
-### 依赖环境
-- Node.js (LTS)
+## 🛠️ 技术底座
 
-### 运行开发版
-```bash
-npm install
-npm run dev
-```
+*   **Frontend**: Vue 3 + Tailwind CSS + Vite
+*   **Hydration**: Electron + better-sqlite3 + Windows nativeTheme API
+*   **Storage**: SQLite 3 高性能本地数据库
 
-### 构建安装包
-```bash
-npm run electron:build
-```
+## 🚀 快速起航
 
-## 📜 许可证
+1.  **克隆仓库**
+    ```bash
+    git clone https://github.com/Metahumanz/EleReaderWin.git
+    ```
+2.  **安装依赖**
+    ```bash
+    npm install
+    ```
+3.  **启动开发环境**
+    ```bash
+    npm run dev
+    ```
+4.  **构建生产版本**
+    ```bash
+    npm run build
+    ```
 
-MIT License
+## 📜 开源协议
+
+MIT License. 欢迎提交 PR 或 Issue 进行交流。
