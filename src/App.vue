@@ -75,15 +75,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-transparent text-white selection:bg-blue-500/30 overflow-hidden font-['Segoe_UI',_sans-serif]">
+  <div class="min-h-screen bg-transparent text-slate-800 dark:text-white selection:bg-blue-500/30 overflow-hidden font-['Segoe_UI',_sans-serif]">
     <!-- Quit Confirmation Modal -->
     <Transition name="fade">
       <div v-if="showQuitConfirm" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center" @click.self="cancelQuit">
-        <div class="bg-[#2d2d2d] p-6 rounded-xl max-w-sm w-full shadow-2xl border border-white/5 text-center">
-          <h3 class="text-xl font-bold mb-2">退出阅读器</h3>
-          <p class="text-sm text-slate-300 mb-6">确定要退出 EleWinReader 吗？</p>
+        <div class="bg-white dark:bg-[#2d2d2d] p-6 rounded-xl max-w-sm w-full shadow-2xl border border-black/5 dark:border-white/5 text-center">
+          <h3 class="text-xl font-bold mb-2 text-slate-800 dark:text-white">退出阅读器</h3>
+          <p class="text-sm text-slate-500 dark:text-slate-300 mb-6">确定要退出 EleWinReader 吗？</p>
           <div class="flex gap-3">
-            <button @click="cancelQuit" class="flex-1 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors font-semibold border border-white/5">取消</button>
+            <button @click="cancelQuit" class="flex-1 py-2 rounded-lg bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 transition-colors font-semibold border border-black/5 dark:border-white/5 text-slate-700 dark:text-white">取消</button>
             <button @click="confirmQuit" class="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 transition-colors font-semibold text-white">退出 (ESC/Enter)</button>
           </div>
         </div>
@@ -104,18 +104,18 @@ onUnmounted(() => {
         <!-- Sidebar -->
         <aside :class="['bg-transparent flex flex-col pt-6 shrink-0 z-10 transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]', isSidebarCollapsed ? 'w-[68px]' : 'w-[260px]']">
           <div class="px-4 mb-6 flex items-center window-drag relative min-h-[32px]">
-            <button @click="toggleSidebar" class="absolute left-4 w-9 h-9 rounded-md hover:bg-white/10 flex items-center justify-center text-lg active:scale-95 transition-colors no-drag cursor-pointer z-50 text-white/80 hover:text-white" title="折叠导航栏">
+            <button @click="toggleSidebar" class="absolute left-4 w-9 h-9 rounded-md hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-lg active:scale-95 transition-colors no-drag cursor-pointer z-50 text-slate-600 hover:text-slate-800 dark:text-white/80 dark:hover:text-white" title="折叠导航栏">
               ☰
             </button>
             <div class="flex items-center gap-3 ml-12 transition-opacity duration-300 pointer-events-none" :class="isSidebarCollapsed ? 'opacity-0' : 'opacity-100'">
-              <div class="w-8 h-8 rounded-md bg-[#005fb8] flex items-center justify-center font-bold text-lg shadow-sm font-italic">E</div>
-              <h1 class="text-[15px] font-semibold text-white/90 tracking-wide">EleWinReader</h1>
+              <div class="w-8 h-8 rounded-md bg-[#005fb8] flex items-center justify-center font-bold text-lg shadow-sm font-italic text-white">E</div>
+              <h1 class="text-[15px] font-semibold tracking-wide text-slate-800 dark:text-white/90">EleWinReader</h1>
             </div>
           </div>
           
           <nav class="flex-1 px-3 space-y-1">
             <button @click="currentView = 'bookshelf'" 
-                    :class="currentView === 'bookshelf' ? 'bg-white/[0.08] relative' : 'hover:bg-white/[0.04] hover:-translate-y-0.5 hover:shadow-lg'"
+                    :class="currentView === 'bookshelf' ? 'bg-black/5 dark:bg-white/[0.08] relative' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04] hover:-translate-y-0.5 hover:shadow-lg'"
                     class="w-full text-left p-2.5 rounded-md transition-all duration-300 flex items-center group">
               <div v-if="currentView === 'bookshelf'" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-[#005fb8] rounded-r-full"></div>
               <div class="w-8 flex justify-center shrink-0">
@@ -123,19 +123,9 @@ onUnmounted(() => {
               </div>
               <span class="text-[13px] font-medium opacity-90 whitespace-nowrap overflow-hidden transition-all duration-300 ml-2" :class="isSidebarCollapsed ? 'w-0 opacity-0' : 'w-full'">书架大厅</span>
             </button>
-            
-            <button @click="currentView = 'settings'" 
-                    :class="currentView === 'settings' ? 'bg-white/[0.08] relative' : 'hover:bg-white/[0.04] hover:-translate-y-0.5 hover:shadow-lg'"
-                    class="w-full text-left p-2.5 rounded-md transition-all duration-300 flex items-center group">
-              <div v-if="currentView === 'settings'" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-[#005fb8] rounded-r-full"></div>
-              <div class="w-8 flex justify-center shrink-0">
-                <span class="text-[18px] opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-transform">⚙️</span>
-              </div>
-              <span class="text-[13px] font-medium opacity-90 whitespace-nowrap overflow-hidden transition-all duration-300 ml-2" :class="isSidebarCollapsed ? 'w-0 opacity-0' : 'w-full'">偏好设置</span>
-            </button>
 
             <button @click="currentView = 'typography'" 
-                    :class="currentView === 'typography' ? 'bg-white/[0.08] relative' : 'hover:bg-white/[0.04] hover:-translate-y-0.5 hover:shadow-lg'"
+                    :class="currentView === 'typography' ? 'bg-black/5 dark:bg-white/[0.08] relative' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04] hover:-translate-y-0.5 hover:shadow-lg'"
                     class="w-full text-left p-2.5 rounded-md transition-all duration-300 flex items-center group mt-1">
               <div v-if="currentView === 'typography'" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-[#005fb8] rounded-r-full"></div>
               <div class="w-8 flex justify-center shrink-0">
@@ -144,10 +134,22 @@ onUnmounted(() => {
               <span class="text-[13px] font-medium opacity-90 whitespace-nowrap overflow-hidden transition-all duration-300 ml-2" :class="isSidebarCollapsed ? 'w-0 opacity-0' : 'w-full'">排版与预览</span>
             </button>
           </nav>
+
+          <div class="px-3 pb-6">
+            <button @click="currentView = 'settings'" 
+                    :class="currentView === 'settings' ? 'bg-black/5 dark:bg-white/[0.08] relative' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04] hover:-translate-y-0.5 hover:shadow-lg'"
+                    class="w-full text-left p-2.5 rounded-md transition-all duration-300 flex items-center group">
+              <div v-if="currentView === 'settings'" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-[#005fb8] rounded-r-full"></div>
+              <div class="w-8 flex justify-center shrink-0">
+                <span class="text-[18px] opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-transform">⚙️</span>
+              </div>
+              <span class="text-[13px] font-medium opacity-90 whitespace-nowrap overflow-hidden transition-all duration-300 ml-2" :class="isSidebarCollapsed ? 'w-0 opacity-0' : 'w-full'">偏好设置</span>
+            </button>
+          </div>
         </aside>
         
         <!-- Content Pane -->
-        <main class="flex-1 bg-[#1e1e1e] rounded-tl-lg border-t border-l border-white/5 relative z-0 flex flex-col shadow-[-4px_-4px_15px_rgba(0,0,0,0.4)] mt-1 transition-all duration-300">
+        <main class="flex-1 bg-slate-50 dark:bg-[#1e1e1e] rounded-tl-lg border-t border-l border-black/5 dark:border-white/5 relative z-0 flex flex-col shadow-[-4px_-4px_15px_rgba(0,0,0,0.15)] dark:shadow-[-4px_-4px_15px_rgba(0,0,0,0.4)] mt-1 transition-all duration-300">
           <!-- Draggable Top Bar Area -->
           <div class="h-10 max-h-10 w-full window-drag shrink-0 rounded-tl-lg"></div>
           

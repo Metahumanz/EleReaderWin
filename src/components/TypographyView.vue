@@ -5,6 +5,7 @@ const fontSize = ref(18)
 const lineHeight = ref(1.8)
 const pIndent = ref(2)
 const pSpacing = ref(0.8)
+const bgImage = ref('')
 
 const saveTypography = async () => {
     await window.electronAPI.db.query("INSERT OR REPLACE INTO settings (key, value) VALUES ('fontSize', ?)", [fontSize.value.toString()])
@@ -15,12 +16,13 @@ const saveTypography = async () => {
 
 onMounted(async () => {
     try {
-        const s = await window.electronAPI.db.query("SELECT * FROM settings WHERE key IN ('fontSize', 'lineHeight', 'pIndent', 'pSpacing')")
+        const s = await window.electronAPI.db.query("SELECT * FROM settings WHERE key IN ('fontSize', 'lineHeight', 'pIndent', 'pSpacing', 'bgImage')")
         for (const row of s as any[]) {
             if (row.key === 'fontSize') fontSize.value = Number(row.value)
             if (row.key === 'lineHeight') lineHeight.value = Number(row.value)
             if (row.key === 'pIndent') pIndent.value = Number(row.value)
             if (row.key === 'pSpacing') pSpacing.value = Number(row.value)
+            if (row.key === 'bgImage') bgImage.value = row.value
         }
     } catch {}
 })
@@ -29,15 +31,17 @@ onMounted(async () => {
 <template>
   <div class="pt-2 pb-20">
     <div class="mb-10 px-1">
-      <h2 class="text-[22px] font-semibold text-white/90 tracking-wide">排版与预览</h2>
-      <p class="text-white/50 text-[13px] mt-1">全局控制阅读内核的文字间距、缩进等视觉排版</p>
+      <h2 class="text-[22px] font-semibold text-slate-800 dark:text-white/90 tracking-wide">排版与预览</h2>
+      <p class="text-slate-500 dark:text-white/50 text-[13px] mt-1">全局控制阅读内核的文字间距、缩进等视觉排版</p>
     </div>
 
     <!-- Preview Box -->
     <div class="mb-8">
-      <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">阅读引擎实时效果映射</h3>
-      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm p-10 overflow-hidden relative">
-         <div class="relative z-10 prose prose-invert mx-auto break-words text-white/90"
+      <h3 class="text-[14px] font-semibold text-slate-700 dark:text-white/80 mb-3 px-1">阅读引擎实时效果映射</h3>
+      <div class="bg-white dark:bg-[#2d2d2d] rounded-xl border border-black/5 dark:border-white/[0.06] shadow-sm p-10 overflow-hidden relative"
+           :style="bgImage ? { backgroundImage: `url('${bgImage}')`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}">
+         <div class="absolute inset-0 bg-white/40 dark:bg-black/40 backdrop-blur-[2px]" v-if="bgImage"></div>
+         <div class="relative z-10 prose prose-invert mx-auto break-words text-slate-900 dark:text-white/90"
               :style="{ 
                 fontSize: fontSize + 'px', 
                 '--line-height': lineHeight, 
@@ -54,61 +58,61 @@ onMounted(async () => {
 
     <!-- Controls -->
     <div class="mb-8">
-      <h3 class="text-[14px] font-semibold text-white/80 mb-3 px-1">基础参数控制盘</h3>
-      <div class="bg-[#2d2d2d] rounded-xl border border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
+      <h3 class="text-[14px] font-semibold text-slate-700 dark:text-white/80 mb-3 px-1">基础参数控制盘</h3>
+      <div class="bg-white dark:bg-[#2d2d2d] rounded-xl border border-black/5 dark:border-white/[0.06] shadow-sm divide-y divide-white/[0.04]">
          
          <!-- Font Size -->
-         <div class="p-4 hover:bg-white/[0.01] transition-colors">
+         <div class="p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.01] transition-colors">
           <div class="flex items-start gap-4">
             <span class="text-xl opacity-80 mt-0.5">A</span>
             <div class="flex-1 w-full max-w-md">
-              <div class="text-[14px] font-medium text-white/90 flex justify-between">
+              <div class="text-[14px] font-medium text-slate-800 dark:text-white/90 flex justify-between">
                 <span>全局正文字号 (Font Size)</span>
                 <span class="text-emerald-400 font-mono">{{ fontSize }}px</span>
               </div>
-              <input type="range" v-model="fontSize" min="12" max="36" step="1" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
+              <input type="range" v-model="fontSize" min="12" max="36" step="1" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/10 dark:bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
             </div>
           </div>
          </div>
 
          <!-- Line Height -->
-         <div class="p-4 hover:bg-white/[0.01] transition-colors">
+         <div class="p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.01] transition-colors">
           <div class="flex items-start gap-4">
             <span class="text-xl opacity-80 mt-0.5">↕</span>
             <div class="flex-1 w-full max-w-md">
-              <div class="text-[14px] font-medium text-white/90 flex justify-between">
+              <div class="text-[14px] font-medium text-slate-800 dark:text-white/90 flex justify-between">
                 <span>全局行高比例 (Line Height)</span>
                 <span class="text-emerald-400 font-mono">{{ lineHeight.toFixed(1) }}</span>
               </div>
-              <input type="range" v-model="lineHeight" min="1.0" max="3.0" step="0.1" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
+              <input type="range" v-model="lineHeight" min="1.0" max="3.0" step="0.1" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/10 dark:bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
             </div>
           </div>
          </div>
 
          <!-- Paragraph Indent -->
-         <div class="p-4 hover:bg-white/[0.01] transition-colors">
+         <div class="p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.01] transition-colors">
           <div class="flex items-start gap-4">
             <span class="text-xl opacity-80 mt-0.5">⇥</span>
             <div class="flex-1 w-full max-w-md">
-              <div class="text-[14px] font-medium text-white/90 flex justify-between">
+              <div class="text-[14px] font-medium text-slate-800 dark:text-white/90 flex justify-between">
                 <span>首行缩进 (字符宽)</span>
                 <span class="text-emerald-400 font-mono">{{ pIndent }}em</span>
               </div>
-              <input type="range" v-model="pIndent" min="0" max="4" step="0.5" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
+              <input type="range" v-model="pIndent" min="0" max="4" step="0.5" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/10 dark:bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
             </div>
           </div>
          </div>
 
          <!-- Paragraph Spacing -->
-         <div class="p-4 hover:bg-white/[0.01] transition-colors">
+         <div class="p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.01] transition-colors">
           <div class="flex items-start gap-4">
             <span class="text-xl opacity-80 mt-0.5">⤓</span>
             <div class="flex-1 w-full max-w-md">
-              <div class="text-[14px] font-medium text-white/90 flex justify-between">
+              <div class="text-[14px] font-medium text-slate-800 dark:text-white/90 flex justify-between">
                 <span>段落末间距 (Bottom Spacing)</span>
                 <span class="text-emerald-400 font-mono">{{ pSpacing.toFixed(1) }}em</span>
               </div>
-              <input type="range" v-model="pSpacing" min="0" max="3" step="0.1" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
+              <input type="range" v-model="pSpacing" min="0" max="3" step="0.1" @change="saveTypography" class="w-full mt-3 h-1.5 bg-black/10 dark:bg-black/40 rounded-full appearance-none cursor-pointer accent-[#005fb8]" />
             </div>
           </div>
          </div>

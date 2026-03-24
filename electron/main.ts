@@ -208,6 +208,16 @@ async function initDatabase(): Promise<void> {
     }
   } catch(_) {}
 
+  saveDatabase()
+}
+
+app.whenReady().then(async () => {
+  createWindow()
+  try {
+    await initDatabase()
+    console.log('Database initialized successfully')
+  } catch (error) {
+    console.error('Database init failed:', String(error))
     dialog.showErrorBox('数据库初始化失败', String(error))
   }
   setupAutoUpdater()
