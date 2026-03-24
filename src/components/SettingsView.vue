@@ -168,9 +168,7 @@ const downloadUpdate = async () => {
   await window.electronAPI.updater.download()
 }
 
-const openReleases = () => {
-  window.open('https://github.com/Metahumanz/EleReaderWin/releases', '_blank')
-}
+
 
 const installNow = () => {
   window.electronAPI.updater.install()
