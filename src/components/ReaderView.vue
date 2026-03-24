@@ -1042,7 +1042,7 @@ onUnmounted(() => {
 
 /* Menu */
 .menu-ov { position:absolute; inset:0; z-index:50; display:flex; flex-direction:column; }
-.m-top { display:flex; align-items:center; gap:20px; padding:20px 32px; height:auto; min-height:80px; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); border-bottom:1px solid rgba(255,255,255,0.06); }
+.m-top { display:flex; align-items:center; gap:20px; padding:20px 160px 20px 32px; height:auto; min-height:80px; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); border-bottom:1px solid rgba(255,255,255,0.06); }
 .m-back { background:none; border:1px solid rgba(255,255,255,0.15); color:white; font-size:15px; font-weight:600; cursor:pointer; padding:10px 20px; border-radius:12px; transition:all .2s; white-space:nowrap; }
 .m-back:hover { background:rgba(255,255,255,0.1); }
 .m-title { font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:30%; opacity:0.8; }

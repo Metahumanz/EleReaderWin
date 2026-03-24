@@ -64,6 +64,19 @@ body {
   width: 100%;
 }
 
+.window-drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.window-drag * {
+  -webkit-app-region: no-drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Transitions */
 .fade-enter-active,
 .fade-leave-active {

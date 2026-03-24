@@ -302,7 +302,18 @@ ipcMain.handle('win:setAspectRatio', async (_, ratio: number) => {
   if (mainWindow) { const [w] = mainWindow.getSize(); mainWindow.setSize(w, Math.round(w / ratio)) }
 })
 
-ipcMain.handle('win:setFullScreen', async (_, isFull: boolean) => mainWindow?.setFullScreen(isFull))
+ipcMain.handle('win:setFullScreen', async (_, isFull: boolean) => {
+  if (mainWindow) {
+    mainWindow.setFullScreen(isFull)
+    if (process.platform === 'win32') {
+      if (isFull) {
+        mainWindow.setTitleBarOverlay({ color: '#00000000', symbolColor: '#00000000' })
+      } else {
+        mainWindow.setTitleBarOverlay({ color: '#00000000', symbolColor: '#ffffff' })
+      }
+    }
+  }
+})
 
 ipcMain.handle('font:getSystemFonts', async () => {
   if (process.platform !== 'win32') return []
