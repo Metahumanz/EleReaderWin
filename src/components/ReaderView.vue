@@ -60,7 +60,6 @@ const carouselPos = ref(0)
 const prevPageCount = ref(1)
 const tocListRef = ref<HTMLElement | null>(null)
 const suppressAnim = ref(false) // suppress translateX transition during chapter switch
-const showNatControls = ref(false)
 
 
 let flipLock = false
@@ -663,13 +662,8 @@ const downloadProgressFromWebdav = async () => {
   } catch (e) { console.error('WebDAV download err:', e) }
 }
 
-const handleReaderMouseMove = (e: MouseEvent) => {
-  const inCorner = e.clientX > window.innerWidth - 180 && e.clientY < 50
-  if (showNatControls.value !== inCorner) {
-    showNatControls.value = inCorner
-    window.electronAPI.win.setControlsVisible(inCorner)
-  }
-}
+
+
 
 onMounted(async () => {
   window.electronAPI.win.setControlsVisible(false)
@@ -689,12 +683,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="reader-root" @wheel="handleWheel" @click="handleClick" @contextmenu.prevent="handleContextMenu" @mousemove="handleReaderMouseMove">
-    <!-- Hover Native Controls Animation layer -->
-    <div class="fixed top-0 right-0 w-[180px] h-[50px] z-[9999] pointer-events-none transition-all duration-300" :class="showNatControls ? 'opacity-100' : 'opacity-0'" style="-webkit-app-region: no-drag;">
-      <div class="absolute inset-0 bg-gradient-to-l from-white/10 to-transparent backdrop-blur-[2px]"></div>
-    </div>
-
+  <div class="reader-root" @wheel="handleWheel" @click="handleClick" @contextmenu.prevent="handleContextMenu">
     <!-- Separate background layer to allow blurring without blurring text -->
     <div class="fixed inset-0 pointer-events-none transition-all duration-300 transform-gpu origin-center" 
          :style="[readerBgStyle, { filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none', transform: blurAmount > 0 ? 'scale(1.1)' : 'none' }]"
@@ -824,14 +813,14 @@ onUnmounted(() => {
             <div class="m-prog"><input type="range" min="0" max="100" :value="progressPercent" @input="handleProgressSlider" class="m-slider"></div>
             <button @click="goToChapter(currentChapterIndex+1,true)" :disabled="currentChapterIndex>=chapters.length-1" class="m-ch">下一章 ⏭</button>
           </div>
-          <div class="m-info grid grid-cols-3 items-center" style="pointer-events: auto;" @click.stop>
+          <div class="m-info" style="pointer-events: auto;" @click.stop>
             <div class="flex items-center justify-start">
               <button @click="openPanel('toc')" class="m-btn" :class="{active:showToc}">☰ 目录</button>
             </div>
             
-            <div class="flex items-center justify-center gap-2 text-center">
+            <div class="flex flex-1 items-center justify-around text-center">
               <span>第 {{ currentChapterIndex+1 }}/{{ chapters.length }} 章</span>
-              <span class="truncate max-w-[150px]">「{{ currentChapterData?.title }}」</span>
+              <span class="truncate max-w-[180px]">「{{ currentChapterData?.title }}」</span>
               <span>第 {{ currentPage+1 }}/{{ totalPages }} 页</span>
             </div>
 
@@ -1058,11 +1047,11 @@ onUnmounted(() => {
 
 /* Menu */
 .menu-ov { position:absolute; inset:0; z-index:50; display:flex; flex-direction:column; }
-.m-top { display:flex; align-items:center; gap:20px; padding:20px 160px 20px 32px; height:auto; min-height:80px; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); border-bottom:1px solid rgba(255,255,255,0.06); }
+.m-top { display:flex; align-items:center; gap:12px; padding:20px 32px; height:auto; min-height:80px; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); border-bottom:1px solid rgba(255,255,255,0.06); }
 .m-back { background:none; border:1px solid rgba(255,255,255,0.15); color:white; font-size:15px; font-weight:600; cursor:pointer; padding:10px 20px; border-radius:12px; transition:all .2s; white-space:nowrap; }
 .m-back:hover { background:rgba(255,255,255,0.1); }
-.m-title { font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:30%; opacity:0.8; }
-.m-acts { margin-left:auto; display:flex; gap:12px; }
+.m-title { font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:25%; opacity:0.8; }
+.m-acts { flex:1; display:flex; justify-content:flex-end; gap:12px; }
 .m-btn { padding:10px 20px; border-radius:12px; font-size:14px; font-weight:700; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:white; cursor:pointer; transition:all .2s; }
 .m-btn:hover { background:rgba(59,130,246,0.2); }
 .m-btn.active { background:#3b82f6; border-color:#3b82f6; box-shadow:0 4px 12px rgba(59,130,246,0.3); }
@@ -1074,7 +1063,7 @@ onUnmounted(() => {
 .m-slider { width:100%; height:8px; -webkit-appearance:none; appearance:none; background:rgba(255,255,255,0.1); border-radius:4px; outline:none; cursor:pointer; }
 .m-slider::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; background:white; border:3px solid #3b82f6; border-radius:50%; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
 .m-pct { font-size:12px; font-family:monospace; color:rgba(255,255,255,0.5); }
-.m-info { display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; padding:12px 40px 32px; font-size:13px; color:rgba(255,255,255,0.4); font-weight:600; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); gap:16px; }
+.m-info { display:flex; align-items:center; padding:12px 40px 32px; font-size:13px; color:rgba(255,255,255,0.4); font-weight:600; background:rgba(15,23,42,0.92); backdrop-filter:blur(20px); gap:16px; }
 
 /* Flip mode toggle */
 .flip-toggle { display:flex; align-items:center; gap:8px; margin-left:auto; }

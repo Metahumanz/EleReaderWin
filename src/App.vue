@@ -12,7 +12,10 @@ const selectedBookId = ref<number | null>(null)
 const isImmersive = ref(false)
 const showQuitConfirm = ref(false)
 const isSidebarCollapsed = ref(false)
-const toggleSidebar = () => { isSidebarCollapsed.value = !isSidebarCollapsed.value }
+const toggleSidebar = async () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+  try { await window.electronAPI.db.query("INSERT OR REPLACE INTO settings (key, value) VALUES ('sidebarCollapsed', ?)", [isSidebarCollapsed.value ? 'true' : 'false']) } catch {}
+}
 
 const openBook = (bookId: number) => {
   selectedBookId.value = bookId
@@ -24,6 +27,7 @@ const goBack = () => {
   selectedBookId.value = null
   isImmersive.value = false
   window.electronAPI.win.setFullScreen(false)
+  window.electronAPI.win.setControlsVisible(true)
 }
 
 
@@ -57,6 +61,10 @@ const confirmQuit = () => { window.electronAPI.app.quit() }
 
 onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  try {
+    const sc = await window.electronAPI.db.query("SELECT value FROM settings WHERE key = 'sidebarCollapsed'")
+    if (sc[0] && sc[0].value === 'true') isSidebarCollapsed.value = true
+  } catch {}
   try {
     const s = await window.electronAPI.db.query("SELECT value FROM settings WHERE key = 'autoOpenLastRead'")
     if (s[0] && s[0].value === 'true') {
@@ -102,7 +110,7 @@ onUnmounted(() => {
       <!-- PowerToys Style App Layout -->
       <div v-else class="flex h-screen w-full relative">
         <!-- Sidebar -->
-        <aside :class="['bg-transparent flex flex-col pt-6 shrink-0 z-10 transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]', isSidebarCollapsed ? 'w-[68px]' : 'w-[260px]']">
+        <aside :class="['bg-slate-50 dark:bg-[#1e1e1e] flex flex-col pt-6 shrink-0 z-10 transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] border-r border-black/5 dark:border-white/5', isSidebarCollapsed ? 'w-[68px]' : 'w-[260px]']">
           <div class="px-4 mb-6 flex items-center window-drag relative min-h-[32px]">
             <button @click="toggleSidebar" class="absolute left-4 w-9 h-9 rounded-md hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-lg active:scale-95 transition-colors no-drag cursor-pointer z-50 text-slate-600 hover:text-slate-800 dark:text-white/80 dark:hover:text-white" title="折叠导航栏">
               ☰
@@ -149,7 +157,7 @@ onUnmounted(() => {
         </aside>
         
         <!-- Content Pane -->
-        <main class="flex-1 bg-slate-50 dark:bg-[#1e1e1e] rounded-tl-lg border-t border-l border-black/5 dark:border-white/5 relative z-0 flex flex-col shadow-[-4px_-4px_15px_rgba(0,0,0,0.15)] dark:shadow-[-4px_-4px_15px_rgba(0,0,0,0.4)] mt-1 transition-all duration-300">
+        <main class="flex-1 bg-transparent rounded-tl-lg relative z-0 flex flex-col mt-1 transition-all duration-300">
           <!-- Draggable Top Bar Area -->
           <div class="h-10 max-h-10 w-full window-drag shrink-0 rounded-tl-lg"></div>
           

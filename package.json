@@ -1,6 +1,6 @@
 {
   "name": "ele-win-reader",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "description": "A modern desktop reader application built with Electron and Vue",
   "main": "dist-electron/main.js",
   "engines": {

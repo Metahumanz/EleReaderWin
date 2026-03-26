@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'back'): void
   (e: 'refresh-settings'): void
 }>()
@@ -11,7 +11,6 @@ interface ReplacementRule { id: number; pattern: string; replacement: string; sc
 interface Book { id: number; title: string }
 
 const bgImage = ref('')
-const bgPreview = ref('')
 const showKeyHints = ref(true)
 const nextKeys = ref<string[]>(['ArrowRight', 'PageDown', ' '])
 const prevKeys = ref<string[]>(['ArrowLeft', 'PageUp'])
@@ -21,6 +20,7 @@ const updateDetail = ref('')
 const updateAvailable = ref(false)
 const updateReady = ref(false)
 const autoOpenLastRead = ref(false)
+const silentUpdate = ref(false)
 
 const webdavUrl = ref('')
 const webdavDir = ref('Books')
@@ -40,7 +40,7 @@ const loadSettings = async () => {
     const result = await window.electronAPI.db.query('SELECT * FROM settings')
     const settings = result as Setting[]
     for (const s of settings) {
-      if (s.key === 'bgImage') { bgImage.value = s.value || ''; bgPreview.value = s.value || '' }
+      if (s.key === 'bgImage') { bgImage.value = s.value || '' }
       if (s.key === 'reader_nextKeys') { try { nextKeys.value = JSON.parse(s.value) } catch (e){} }
       if (s.key === 'reader_prevKeys') { try { prevKeys.value = JSON.parse(s.value) } catch (e){} }
       if (s.key === 'webdavUrl') webdavUrl.value = s.value
@@ -49,6 +49,7 @@ const loadSettings = async () => {
       if (s.key === 'webdavPass') webdavPass.value = s.value
       if (s.key === 'webdavSync') webdavSync.value = s.value === 'true'
       if (s.key === 'autoOpenLastRead') autoOpenLastRead.value = s.value === 'true'
+      if (s.key === 'silentUpdate') silentUpdate.value = s.value === 'true'
     }
   } catch (e) { console.error(e) }
 }
@@ -61,18 +62,7 @@ const setAspectRatio = async (ratio: number) => {
   await window.electronAPI.win.setAspectRatio(ratio)
 }
 
-const browseImage = async () => {
-  const p = await window.electronAPI.dialog.openImage()
-  if (p) { const url = 'file:///' + p.replace(/\\/g, '/'); bgImage.value = url; bgPreview.value = url }
-}
 
-const applyBgImage = async () => {
-  let v = bgImage.value.trim()
-  if (v && !v.startsWith('file://') && !v.startsWith('http')) v = 'file:///' + v.replace(/\\/g, '/')
-  bgImage.value = v; bgPreview.value = v
-  await saveSetting('bgImage', v)
-  emit('refresh-settings')
-}
 
 const saveWebdav = async () => {
   let url = webdavUrl.value.trim()
@@ -148,11 +138,7 @@ const removePrevKey = (k: string) => {
   saveSetting('reader_prevKeys', JSON.stringify(prevKeys.value))
 }
 
-const clearBgImage = async () => {
-  bgImage.value = ''; bgPreview.value = ''
-  await saveSetting('bgImage', '')
-  emit('refresh-settings')
-}
+
 
 const checkForUpdate = async () => {
   updateStatus.value = '正在检查...'
@@ -169,9 +155,16 @@ const downloadUpdate = async () => {
 }
 
 
-
 const installNow = () => {
-  window.electronAPI.updater.install()
+  if (silentUpdate.value) {
+    window.electronAPI.updater.installSilent()
+  } else {
+    window.electronAPI.updater.install()
+  }
+}
+
+const toggleSilentUpdate = async () => {
+  await saveSetting('silentUpdate', silentUpdate.value ? 'true' : 'false')
 }
 
 // Replacement rules management
@@ -256,27 +249,6 @@ onMounted(async () => {
                 <button @click="setAspectRatio(9/16)" class="px-4 py-1.5 bg-black/5 dark:bg-black/20 hover:bg-black/10 dark:bg-black/40 border border-black/5 dark:border-white/5 hover:border-white/20 rounded-md text-[13px] font-mono transition-colors">9 : 16</button>
                 <button @click="setAspectRatio(4/3)" class="px-4 py-1.5 bg-black/5 dark:bg-black/20 hover:bg-black/10 dark:bg-black/40 border border-black/5 dark:border-white/5 hover:border-white/20 rounded-md text-[13px] font-mono transition-colors">4 : 3</button>
                 <button @click="setAspectRatio(3/4)" class="px-4 py-1.5 bg-black/5 dark:bg-black/20 hover:bg-black/10 dark:bg-black/40 border border-black/5 dark:border-white/5 hover:border-white/20 rounded-md text-[13px] font-mono transition-colors">3 : 4</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.01] transition-colors">
-          <div class="flex items-start gap-4">
-            <span class="text-xl opacity-80 mt-0.5">🎨</span>
-            <div class="flex-1">
-              <div class="text-[14px] font-medium text-slate-800 dark:text-white/90">跨端阅读背景壁纸</div>
-              <div class="text-[12px] text-slate-500 dark:text-white/50 mt-0.5 mb-3">为沉浸阅读模式提供底层墙纸</div>
-              
-              <div class="flex gap-2 mb-3">
-                <input type="text" v-model="bgImage" placeholder="在此键入图片绝对路径..." class="flex-1 bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/10 rounded-md px-3 py-1.5 text-[13px] focus:border-[#005fb8] outline-none transition-colors" />
-                <button @click="browseImage" class="px-4 py-1.5 bg-black/5 dark:bg-black/20 hover:bg-black/10 dark:bg-black/40 border border-black/5 dark:border-white/5 rounded-md text-[13px] transition-colors">📂 浏览</button>
-                <button @click="applyBgImage" class="px-4 py-1.5 bg-[#005fb8] hover:bg-[#005fb8]/90 text-white rounded-md text-[13px] transition-colors font-medium">应用</button>
-                <button v-if="bgImage" @click="clearBgImage" class="px-4 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-md text-[13px] transition-colors">清除</button>
-              </div>
-              
-              <div v-if="bgPreview" class="relative w-full max-w-sm h-32 rounded-lg overflow-hidden border border-black/10 dark:border-white/10 mt-2">
-                <img :src="bgPreview" class="w-full h-full object-cover" alt="背景预览" @error="bgPreview = ''" />
               </div>
             </div>
           </div>
@@ -473,6 +445,26 @@ onMounted(async () => {
               GitHub
             </a>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. 更新行为 -->
+    <div class="mb-4">
+      <h3 class="text-[14px] font-semibold text-slate-700 dark:text-white/80 mb-3 px-1">更新行为</h3>
+      <div class="bg-white dark:bg-[#2d2d2d] rounded-xl border border-black/5 dark:border-white/[0.06] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-400">
+        <div class="flex items-center justify-between p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-center gap-4">
+            <span class="text-xl opacity-80">🤫</span>
+            <div>
+              <div class="text-[14px] font-medium text-slate-800 dark:text-white/90">允许静默更新</div>
+              <div class="text-[12px] text-slate-500 dark:text-white/50 mt-0.5">开启后点击「立即安装」将直接覆盖安装并自动重启，无需再次确认</div>
+            </div>
+          </div>
+          <label class="flex items-center cursor-pointer relative">
+            <input type="checkbox" v-model="silentUpdate" @change="toggleSilentUpdate" class="peer sr-only" />
+            <div class="w-10 h-5 bg-black/10 dark:bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-black/10 dark:border-white/10 peer-checked:border-[#005fb8]"></div>
+          </label>
         </div>
       </div>
     </div>

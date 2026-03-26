@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, screen } from 'electron'
 import { join, extname } from 'path'
 import { is } from '@electron-toolkit/utils'
 import initSqlJs, { Database } from 'sql.js'
@@ -46,7 +46,26 @@ function setupAutoUpdater(): void {
 }
 
 function createWindow(): void {
-  const saved = loadBounds()
+  let saved = loadBounds()
+  // Requirement 2: validate saved bounds against available screens
+  if (saved) {
+    const displays = screen.getAllDisplays()
+    const visible = displays.some(d => {
+      const b = d.bounds
+      return saved!.x >= b.x - 50 && saved!.x < b.x + b.width &&
+             saved!.y >= b.y - 50 && saved!.y < b.y + b.height
+    })
+    if (!visible) {
+      const primary = screen.getPrimaryDisplay()
+      const pw = Math.round(primary.bounds.width * 0.8)
+      const ph = Math.round(primary.bounds.height * 0.8)
+      saved = {
+        x: primary.bounds.x + Math.round((primary.bounds.width - pw) / 2),
+        y: primary.bounds.y + Math.round((primary.bounds.height - ph) / 2),
+        width: pw, height: ph
+      }
+    }
+  }
   mainWindow = new BrowserWindow({
     width: saved?.width || 1200,
     height: saved?.height || 800,
@@ -58,7 +77,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#00000000',
+      color: '#1a1a2e',
       symbolColor: '#ffffff',
       height: 38
     },
@@ -211,6 +230,19 @@ async function initDatabase(): Promise<void> {
   saveDatabase()
 }
 
+// Requirement 1: Single instance lock
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
+
 app.whenReady().then(async () => {
   createWindow()
   try {
@@ -305,12 +337,16 @@ ipcMain.handle('win:setAspectRatio', async (_, ratio: number) => {
 ipcMain.handle('win:setFullScreen', async (_, isFull: boolean) => {
   if (mainWindow) {
     mainWindow.setFullScreen(isFull)
-    if (process.platform === 'win32') {
-      if (isFull) {
-        mainWindow.setTitleBarOverlay({ color: '#00000000', symbolColor: '#00000000' })
-      } else {
-        mainWindow.setTitleBarOverlay({ color: '#00000000', symbolColor: '#ffffff' })
-      }
+  }
+})
+
+// Requirement 4: hide/show titlebar overlay via height
+ipcMain.handle('win:setControlsVisible', async (_, visible: boolean) => {
+  if (mainWindow && process.platform === 'win32') {
+    if (visible) {
+      mainWindow.setTitleBarOverlay({ color: '#1a1a2e', symbolColor: '#ffffff', height: 38 })
+    } else {
+      mainWindow.setTitleBarOverlay({ height: 0 })
     }
   }
 })
@@ -333,8 +369,8 @@ ipcMain.handle('updater:download', async () => {
   try { await autoUpdater.downloadUpdate(); return true } catch (e) { return false }
 })
 
-ipcMain.handle('updater:install', async () => {
-  autoUpdater.quitAndInstall()
+ipcMain.handle('updater:install', async (_, silent?: boolean) => {
+  autoUpdater.quitAndInstall(silent === true, true)
 })
 
 ipcMain.handle('app:getVersion', async () => app.getVersion())
