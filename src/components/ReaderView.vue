@@ -51,6 +51,7 @@ const pageMode = ref<'single' | 'double'>('single')
 const doublePageStep = ref<1 | 2>(2)
 const contentRef = ref<HTMLElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
+const containerWidth = ref(0)
 
 // Three-container carousel
 const prevContentRef = ref<HTMLElement | null>(null)
@@ -315,6 +316,7 @@ const calculatePages = () => {
   if (!contentRef.value || !containerRef.value) return
   const cw = containerRef.value.clientWidth
   if (cw <= 0) return
+  containerWidth.value = cw
   const pageWidth = pageMode.value === 'double' ? cw / 2 : cw
   totalPages.value = Math.max(1, Math.ceil(contentRef.value.scrollWidth / pageWidth))
   
@@ -340,13 +342,14 @@ const calcPrevPages = () => {
 }
 
 const pageOffset = computed(() => {
-  const cw = containerRef.value?.clientWidth || 0
+  const cw = containerWidth.value || 0
   const pageWidth = pageMode.value === 'double' ? cw / 2 : cw
   return `-${currentPage.value * pageWidth}px`
 })
 const prevPageOffset = computed(() => {
-  if (!prevContainerRef.value) return '0px'
-  const pageWidth = pageMode.value === 'double' ? prevContainerRef.value.clientWidth / 2 : prevContainerRef.value.clientWidth
+  const cw = containerWidth.value || 0
+  if (cw <= 0) return '0px'
+  const pageWidth = pageMode.value === 'double' ? cw / 2 : cw
   return `-${Math.max(0, prevPageCount.value - 1) * pageWidth}px`
 })
 

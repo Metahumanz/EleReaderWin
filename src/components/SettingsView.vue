@@ -437,7 +437,7 @@ onMounted(async () => {
             <template v-if="updateAvailable">
               <button @click="downloadUpdate" class="px-4 py-1.5 bg-[#005fb8] hover:bg-[#005fb8]/90 text-white rounded-md text-[13px] transition-colors font-medium">后台下载最新版</button>
             </template>
-            <button v-else-if="updateReady" @click="installNow" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-[13px] transition-colors font-medium shadow-sm">部署并重启</button>
+            <button v-else-if="updateReady" @click="installNow" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-[13px] transition-colors font-medium shadow-sm">立即安装</button>
             <button v-else @click="checkForUpdate" class="px-4 py-1.5 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-slate-800 dark:text-white/90 rounded-md text-[13px] transition-colors font-medium border border-black/5 dark:border-white/5">检查更新</button>
             
             <a href="https://github.com/Metahumanz/EleReaderWin" target="_blank" class="px-4 py-1.5 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-slate-800 dark:text-white/90 rounded-md text-[13px] transition-colors font-medium border border-black/5 dark:border-white/5 flex items-center gap-1.5">

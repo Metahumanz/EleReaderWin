@@ -18,7 +18,10 @@ function loadBounds(): Electron.Rectangle | null {
 }
 function saveBounds(): void {
   if (!mainWindow) return
-  try { writeFileSync(boundsFile, JSON.stringify(mainWindow.getBounds())) } catch {}
+  try {
+    const b = mainWindow.isMaximized() ? mainWindow.getNormalBounds() : mainWindow.getBounds()
+    writeFileSync(boundsFile, JSON.stringify(b))
+  } catch {}
 }
 
 // ---- Auto updater setup ----
@@ -357,7 +360,7 @@ ipcMain.handle('win:setControlsVisible', async (_, visible: boolean) => {
     if (visible) {
       mainWindow.setTitleBarOverlay({ color: '#1e1e1e', symbolColor: '#ffffff', height: 38 })
     } else {
-      mainWindow.setTitleBarOverlay({ height: 0 })
+      mainWindow.setTitleBarOverlay({ color: '#00000000', symbolColor: '#00000000', height: 0 })
     }
   }
 })
