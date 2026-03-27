@@ -50,20 +50,31 @@ function createWindow(): void {
   // Requirement 2: validate saved bounds against available screens
   if (saved) {
     const displays = screen.getAllDisplays()
-    const visible = displays.some(d => {
+    const target = displays.find(d => {
       const b = d.bounds
       return saved!.x >= b.x - 50 && saved!.x < b.x + b.width &&
              saved!.y >= b.y - 50 && saved!.y < b.y + b.height
     })
-    if (!visible) {
+    if (!target) {
       const primary = screen.getPrimaryDisplay()
-      const pw = Math.round(primary.bounds.width * 0.8)
-      const ph = Math.round(primary.bounds.height * 0.8)
+      const wa = primary.workArea
+      const pw = Math.round(wa.width * 0.8)
+      const ph = Math.round(wa.height * 0.8)
       saved = {
-        x: primary.bounds.x + Math.round((primary.bounds.width - pw) / 2),
-        y: primary.bounds.y + Math.round((primary.bounds.height - ph) / 2),
+        x: wa.x + Math.round((wa.width - pw) / 2),
+        y: wa.y + Math.round((wa.height - ph) / 2),
         width: pw, height: ph
       }
+    } else {
+      // Clamp size to not exceed the target screen's work area
+      const wa = target.workArea
+      saved.width = Math.min(saved.width, wa.width)
+      saved.height = Math.min(saved.height, wa.height)
+      // Clamp position so the window doesn't overflow
+      if (saved.x + saved.width > wa.x + wa.width) saved.x = wa.x + wa.width - saved.width
+      if (saved.y + saved.height > wa.y + wa.height) saved.y = wa.y + wa.height - saved.height
+      if (saved.x < wa.x) saved.x = wa.x
+      if (saved.y < wa.y) saved.y = wa.y
     }
   }
   mainWindow = new BrowserWindow({
@@ -77,7 +88,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#1a1a2e',
+      color: '#1e1e1e',
       symbolColor: '#ffffff',
       height: 38
     },
@@ -344,7 +355,7 @@ ipcMain.handle('win:setFullScreen', async (_, isFull: boolean) => {
 ipcMain.handle('win:setControlsVisible', async (_, visible: boolean) => {
   if (mainWindow && process.platform === 'win32') {
     if (visible) {
-      mainWindow.setTitleBarOverlay({ color: '#1a1a2e', symbolColor: '#ffffff', height: 38 })
+      mainWindow.setTitleBarOverlay({ color: '#1e1e1e', symbolColor: '#ffffff', height: 38 })
     } else {
       mainWindow.setTitleBarOverlay({ height: 0 })
     }

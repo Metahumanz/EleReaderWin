@@ -577,7 +577,15 @@ const handleKeydown = (e: KeyboardEvent) => {
   else if (prevKeys.value.includes(k) || prevKeys.value.includes(c)) { e.preventDefault(); prevPage() }
 }
 
-const toggleImmersiveMode = () => { isImmersive.value = !isImmersive.value; emit('toggle-immersive', isImmersive.value) }
+const toggleImmersiveMode = () => {
+  isImmersive.value = !isImmersive.value
+  emit('toggle-immersive', isImmersive.value)
+  if (!isImmersive.value) {
+    // Delay recalc after exiting fullscreen to ensure DOM layout has settled
+    setTimeout(recalc, 400)
+    setTimeout(recalc, 800)
+  }
+}
 const handleGoBack = () => { saveProgress(); closeAll(); emit('go-back') }
 
 const progressPercent = computed(() => {
@@ -802,7 +810,7 @@ onUnmounted(() => {
             <button @click="handleGoBack" class="m-back">← 书架</button>
             <div class="m-title">{{ book?.title }}</div>
             <div class="m-acts">
-              <button @click="toggleImmersiveMode" class="m-btn">{{ isImmersive ? '退出全屏' : '全屏' }}</button>
+              <button @click="toggleImmersiveMode" class="m-btn">{{ isImmersive ? '⊡ 退出全屏' : '⛶ 全屏' }}</button>
               <button @click="openPanel('search')" class="m-btn" :class="{active:showSearch}">🔍 搜索</button>
               <button @click="openPanel('rules')" class="m-btn" :class="{active:showRules}">📝 替换</button>
               <button @click="openPanel('styling')" class="m-btn" :class="{active:showStyling}">Aa 排版</button>

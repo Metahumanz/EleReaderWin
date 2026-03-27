@@ -22,28 +22,37 @@ const flipMode = ref<'slide' | 'cover'>('slide')
 const pIndent = ref(2)
 const pSpacing = ref(0.8)
 
+// Custom themes
+interface CustomTheme {
+  id: number; name: string; bgImage: string; coverColor: string; fontColor: string;
+  fontFamily: string; fontSize: number; lineHeight: number; letterSpacing: number;
+  fontWeight: number; marginX: number; marginY: number; pageMode: string; doublePageStep: number
+}
+const customThemes = ref<CustomTheme[]>([])
+const newThemeName = ref('')
+
 const saveSetting = async (k: string, v: string) => {
   await window.electronAPI.db.query('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [k, v])
 }
 
 const saveAll = async () => {
-  await saveSetting('fontSize', fontSize.value.toString())
-  await saveSetting('lineHeight', lineHeight.value.toString())
-  await saveSetting('letterSpacing', letterSpacing.value.toString())
-  await saveSetting('fontWeight', fontWeight.value.toString())
-  await saveSetting('marginX', marginX.value.toString())
-  await saveSetting('marginY', marginY.value.toString())
-  await saveSetting('fontFamily', fontFamily.value)
-  await saveSetting('fontColor', fontColor.value)
-  await saveSetting('coverColor', coverColor.value)
-  await saveSetting('blurAmount', blurAmount.value.toString())
-  await saveSetting('textAlign', textAlign.value)
-  await saveSetting('alignBottom', alignBottom.value ? 'true' : 'false')
-  await saveSetting('pageMode', pageMode.value)
-  await saveSetting('doublePageStep', doublePageStep.value.toString())
-  await saveSetting('flipMode', flipMode.value)
-  await saveSetting('pIndent', pIndent.value.toString())
-  await saveSetting('pSpacing', pSpacing.value.toString())
+  await saveSetting('reader_fontSize', fontSize.value.toString())
+  await saveSetting('reader_lineHeight', lineHeight.value.toString())
+  await saveSetting('reader_letterSpacing', letterSpacing.value.toString())
+  await saveSetting('reader_fontWeight', fontWeight.value.toString())
+  await saveSetting('reader_marginX', marginX.value.toString())
+  await saveSetting('reader_marginY', marginY.value.toString())
+  await saveSetting('reader_fontFamily', fontFamily.value)
+  await saveSetting('reader_fontColor', fontColor.value)
+  await saveSetting('reader_coverColor', coverColor.value)
+  await saveSetting('reader_blurAmount', blurAmount.value.toString())
+  await saveSetting('reader_textAlign', textAlign.value)
+  await saveSetting('reader_alignBottom', alignBottom.value ? 'true' : 'false')
+  await saveSetting('reader_pageMode', pageMode.value)
+  await saveSetting('reader_doublePageStep', doublePageStep.value.toString())
+  await saveSetting('reader_flipMode', flipMode.value)
+  await saveSetting('reader_pIndent', pIndent.value.toString())
+  await saveSetting('reader_pSpacing', pSpacing.value.toString())
 }
 
 const browseImage = async () => {
@@ -66,37 +75,73 @@ const clearBgImage = async () => {
 onMounted(async () => {
   try {
     const allKeys = [
-      'fontSize', 'lineHeight', 'letterSpacing', 'fontWeight', 'marginX', 'marginY',
-      'fontFamily', 'fontColor', 'coverColor', 'bgImage', 'blurAmount',
-      'textAlign', 'alignBottom', 'pageMode', 'doublePageStep', 'flipMode',
-      'pIndent', 'pSpacing'
+      'reader_fontSize', 'reader_lineHeight', 'reader_letterSpacing', 'reader_fontWeight',
+      'reader_marginX', 'reader_marginY', 'reader_fontFamily', 'reader_fontColor',
+      'reader_coverColor', 'bgImage', 'reader_blurAmount', 'reader_textAlign',
+      'reader_alignBottom', 'reader_pageMode', 'reader_doublePageStep', 'reader_flipMode',
+      'reader_pIndent', 'reader_pSpacing', 'custom_themes'
     ]
     const placeholders = allKeys.map(() => '?').join(',')
     const s = await window.electronAPI.db.query(`SELECT * FROM settings WHERE key IN (${placeholders})`, allKeys)
     for (const row of s as any[]) {
       switch (row.key) {
-        case 'fontSize': fontSize.value = Number(row.value); break
-        case 'lineHeight': lineHeight.value = Number(row.value); break
-        case 'letterSpacing': letterSpacing.value = Number(row.value); break
-        case 'fontWeight': fontWeight.value = Number(row.value); break
-        case 'marginX': marginX.value = Number(row.value); break
-        case 'marginY': marginY.value = Number(row.value); break
-        case 'fontFamily': fontFamily.value = row.value; break
-        case 'fontColor': fontColor.value = row.value; break
-        case 'coverColor': coverColor.value = row.value; break
+        case 'reader_fontSize': fontSize.value = Number(row.value); break
+        case 'reader_lineHeight': lineHeight.value = Number(row.value); break
+        case 'reader_letterSpacing': letterSpacing.value = Number(row.value); break
+        case 'reader_fontWeight': fontWeight.value = Number(row.value); break
+        case 'reader_marginX': marginX.value = Number(row.value); break
+        case 'reader_marginY': marginY.value = Number(row.value); break
+        case 'reader_fontFamily': fontFamily.value = row.value; break
+        case 'reader_fontColor': fontColor.value = row.value; break
+        case 'reader_coverColor': coverColor.value = row.value; break
         case 'bgImage': bgImage.value = row.value || ''; bgPreview.value = row.value || ''; break
-        case 'blurAmount': blurAmount.value = Number(row.value); break
-        case 'textAlign': textAlign.value = row.value as any; break
-        case 'alignBottom': alignBottom.value = row.value === 'true'; break
-        case 'pageMode': pageMode.value = row.value as any; break
-        case 'doublePageStep': doublePageStep.value = Number(row.value) as any; break
-        case 'flipMode': flipMode.value = row.value as any; break
-        case 'pIndent': pIndent.value = Number(row.value); break
-        case 'pSpacing': pSpacing.value = Number(row.value); break
+        case 'reader_blurAmount': blurAmount.value = Number(row.value); break
+        case 'reader_textAlign': textAlign.value = row.value as any; break
+        case 'reader_alignBottom': alignBottom.value = row.value === 'true'; break
+        case 'reader_pageMode': pageMode.value = row.value as any; break
+        case 'reader_doublePageStep': doublePageStep.value = Number(row.value) as any; break
+        case 'reader_flipMode': flipMode.value = row.value as any; break
+        case 'reader_pIndent': pIndent.value = Number(row.value); break
+        case 'reader_pSpacing': pSpacing.value = Number(row.value); break
+        case 'custom_themes': try { customThemes.value = JSON.parse(row.value) || [] } catch (_) {} break
       }
     }
   } catch {}
 })
+
+const saveTheme = async () => {
+  if (!newThemeName.value.trim()) return
+  customThemes.value.push({
+    id: Date.now(), name: newThemeName.value.trim(), bgImage: bgImage.value, coverColor: coverColor.value,
+    fontColor: fontColor.value, fontFamily: fontFamily.value, fontSize: fontSize.value, lineHeight: lineHeight.value,
+    letterSpacing: letterSpacing.value, fontWeight: fontWeight.value, marginX: marginX.value, marginY: marginY.value,
+    pageMode: pageMode.value, doublePageStep: doublePageStep.value
+  })
+  await saveSetting('custom_themes', JSON.stringify(customThemes.value))
+  newThemeName.value = ''
+}
+
+const deleteTheme = async (id: number) => {
+  customThemes.value = customThemes.value.filter(t => t.id !== id)
+  await saveSetting('custom_themes', JSON.stringify(customThemes.value))
+}
+
+const applyThemeConfig = (t: Partial<CustomTheme>) => {
+  if (t.bgImage !== undefined) bgImage.value = t.bgImage
+  if (t.coverColor !== undefined) coverColor.value = t.coverColor
+  if (t.fontColor !== undefined) fontColor.value = t.fontColor
+  if (t.fontFamily !== undefined) fontFamily.value = t.fontFamily
+  if (t.fontSize !== undefined) fontSize.value = t.fontSize
+  if (t.lineHeight !== undefined) lineHeight.value = t.lineHeight
+  if (t.letterSpacing !== undefined) letterSpacing.value = t.letterSpacing
+  if (t.fontWeight !== undefined) fontWeight.value = t.fontWeight
+  if (t.marginX !== undefined) marginX.value = t.marginX
+  if (t.marginY !== undefined) marginY.value = t.marginY
+  if (t.pageMode !== undefined) pageMode.value = t.pageMode as 'single' | 'double'
+  if (t.doublePageStep !== undefined) doublePageStep.value = t.doublePageStep as 1 | 2
+  bgPreview.value = bgImage.value
+  saveAll()
+}
 </script>
 
 <template>
@@ -370,6 +415,37 @@ onMounted(async () => {
             <div class="flex gap-2">
               <button @click="doublePageStep=1; saveAll()" :class="doublePageStep===1 ? 'bg-[#005fb8] text-white border-[#005fb8]' : 'bg-black/5 dark:bg-black/20 text-slate-800 dark:text-white/90 border-black/5 dark:border-white/5'" class="px-4 py-1.5 rounded-md text-[13px] font-medium border transition-colors">1页</button>
               <button @click="doublePageStep=2; saveAll()" :class="doublePageStep===2 ? 'bg-[#005fb8] text-white border-[#005fb8]' : 'bg-black/5 dark:bg-black/20 text-slate-800 dark:text-white/90 border-black/5 dark:border-white/5'" class="px-4 py-1.5 rounded-md text-[13px] font-medium border transition-colors">2页</button>
+            </div>
+          </div>
+         </div>
+
+      </div>
+    </div>
+
+    <!-- 自定义主题 -->
+    <div class="mb-8">
+      <h3 class="text-[14px] font-semibold text-slate-700 dark:text-white/80 mb-3 px-1">自定义主题</h3>
+      <div class="bg-white dark:bg-[#2d2d2d] rounded-xl border border-black/5 dark:border-white/[0.06] shadow-sm divide-y divide-black/5 dark:divide-white/[0.04]">
+
+         <!-- Save current -->
+         <div class="p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.01] transition-colors">
+          <div class="flex items-center gap-4">
+            <span class="text-xl opacity-80">💾</span>
+            <div class="text-[14px] font-medium text-slate-800 dark:text-white/90 flex-1">保存当前配置为主题</div>
+          </div>
+          <div class="flex gap-2 mt-3 ml-9">
+            <input type="text" v-model="newThemeName" placeholder="输入主题名称..." class="flex-1 bg-black/5 dark:bg-black/20 border border-black/10 dark:border-white/10 rounded-md px-3 py-1.5 text-[13px] focus:border-[#005fb8] outline-none transition-colors text-slate-800 dark:text-white/90" />
+            <button @click="saveTheme" :disabled="!newThemeName.trim()" class="px-4 py-1.5 bg-[#005fb8] hover:bg-[#005fb8]/90 text-white rounded-md text-[13px] transition-colors font-medium disabled:opacity-30 disabled:cursor-default">保存</button>
+          </div>
+         </div>
+
+         <!-- Saved themes list -->
+         <div v-if="customThemes.length > 0" class="p-4">
+          <div class="text-[13px] text-slate-500 dark:text-white/50 mb-3">已保存的主题</div>
+          <div class="flex flex-wrap gap-2">
+            <div v-for="t in customThemes" :key="t.id" class="flex items-center bg-black/5 dark:bg-black/20 rounded-lg overflow-hidden border border-black/5 dark:border-white/[0.06] transition-all hover:border-[#005fb8]/30">
+              <button @click="applyThemeConfig(t)" class="px-3 py-1.5 text-[13px] font-medium text-slate-700 dark:text-white/80 hover:text-[#005fb8] dark:hover:text-[#60cdff] transition-colors">{{ t.name }}</button>
+              <button @click="deleteTheme(t.id)" class="px-2 py-1.5 text-[12px] text-red-400/60 hover:text-red-500 hover:bg-red-500/10 border-l border-black/5 dark:border-white/[0.06] transition-colors">✕</button>
             </div>
           </div>
          </div>
