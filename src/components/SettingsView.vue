@@ -19,6 +19,7 @@ const updateStatus = ref('')
 const updateDetail = ref('')
 const updateAvailable = ref(false)
 const updateReady = ref(false)
+const isDownloading = ref(false)
 const autoOpenLastRead = ref(false)
 const silentUpdate = ref(false)
 
@@ -152,6 +153,7 @@ const checkForUpdate = async () => {
 const downloadUpdate = async () => {
   updateStatus.value = '准备下载...'
   updateAvailable.value = false
+  isDownloading.value = true
   await window.electronAPI.updater.download()
 }
 
@@ -217,11 +219,11 @@ onMounted(async () => {
   window.electronAPI.updater.onStatus((data) => {
     switch (data.status) {
       case 'checking': updateStatus.value = '🔍 正在检查...'; break
-      case 'available': updateStatus.value = `🎉 发现新版本 v${data.version}`; updateDetail.value = ''; updateAvailable.value = true; break
+      case 'available': updateStatus.value = `🎉 发现新版本 v${data.version}`; updateDetail.value = ''; updateAvailable.value = true; isDownloading.value = false; break
       case 'up-to-date': updateStatus.value = '✅ 已是最新版本'; break
-      case 'downloading': updateStatus.value = `⏬ 下载中 ${data.percent}%`; break
-      case 'downloaded': updateStatus.value = '✅ 下载完成'; updateDetail.value = '可立即安装或等下次启动时自动安装'; updateReady.value = true; updateAvailable.value = false; break
-      case 'error': updateStatus.value = '❌ 更新失败'; updateDetail.value = data.message || ''; break
+      case 'downloading': updateStatus.value = `⏬ 下载中 ${data.percent}%`; isDownloading.value = true; break
+      case 'downloaded': updateStatus.value = '✅ 下载完成'; updateDetail.value = '可立即安装或等下次启动时自动安装'; updateReady.value = true; updateAvailable.value = false; isDownloading.value = false; break
+      case 'error': updateStatus.value = '❌ 更新失败'; updateDetail.value = data.message || ''; isDownloading.value = false; break
     }
   })
 })
@@ -439,6 +441,7 @@ onMounted(async () => {
               <button @click="downloadUpdate" class="px-4 py-1.5 bg-[#005fb8] hover:bg-[#005fb8]/90 text-white rounded-md text-[13px] transition-colors font-medium">后台下载最新版</button>
             </template>
             <button v-else-if="updateReady" @click="installNow" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-[13px] transition-colors font-medium shadow-sm">立即安装</button>
+            <button v-else-if="isDownloading" disabled class="px-4 py-1.5 bg-black/5 dark:bg-white/5 text-slate-400 dark:text-white/40 rounded-md text-[13px] font-medium border border-transparent cursor-not-allowed">下载中...</button>
             <button v-else @click="checkForUpdate" class="px-4 py-1.5 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-slate-800 dark:text-white/90 rounded-md text-[13px] transition-colors font-medium border border-black/5 dark:border-white/5">检查更新</button>
             
             <a href="https://github.com/Metahumanz/EleReaderWin" target="_blank" class="px-4 py-1.5 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-slate-800 dark:text-white/90 rounded-md text-[13px] transition-colors font-medium border border-black/5 dark:border-white/5 flex items-center gap-1.5">
