@@ -87,7 +87,7 @@ function createWindow(): void {
     y: saved?.y,
     minWidth: 300,
     minHeight: 300,
-    show: false,
+    show: true,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -103,14 +103,16 @@ function createWindow(): void {
       nodeIntegration: false
     }
   })
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  // mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.on('resize', saveBounds)
   mainWindow.on('move', saveBounds)
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+  if (is.dev && process.env['VITE_DEV_SERVER_URL']) {
+    mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL'])
+  } else if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../dist/index.html'))
