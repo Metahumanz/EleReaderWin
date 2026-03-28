@@ -166,7 +166,9 @@ const applyThemeConfig = (t: Partial<CustomTheme>) => {
                 fontFamily: fontFamily,
                 color: fontColor,
                 textAlign: textAlign,
-                textIndent: pIndent + 'em'
+                textIndent: pIndent + 'em',
+                columnCount: pageMode === 'double' ? 2 : 1,
+                columnGap: pageMode === 'double' ? '3rem' : 'normal'
               }">
             <h1 class="text-center font-bold mb-10 opacity-70" :style="{ fontSize: (fontSize * 1.4) + 'px', color: fontColor }">第一章 深渊的呼唤</h1>
             <p :style="{ marginBottom: pSpacing + 'em' }">随着一阵白光闪过，这片死寂的空间里突然多出了几分鲜活的生气。他睁开眼睛，环顾四周，这不仅仅是单纯视觉的反馈，那股厚重潮湿的空气顺着鼻腔直达肺部。</p>

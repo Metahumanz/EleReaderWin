@@ -63,6 +63,7 @@ const suppressAnim = ref(false) // suppress translateX transition during chapter
 
 
 let flipLock = false
+let lastFlipTime = 0
 
 // Search
 const searchQuery = ref('')
@@ -292,12 +293,18 @@ const doSearch = async () => {
       const ch = chapters.value[i]
       // Strip HTML tags for plain text search
       const plain = ch.body.replace(/<[^>]+>/g, '')
-      const idx = plain.toLowerCase().indexOf(q.toLowerCase())
-      if (idx >= 0) {
-        const start = Math.max(0, idx - 20)
-        const end = Math.min(plain.length, idx + q.length + 40)
-        const snippet = (start > 0 ? '...' : '') + plain.substring(start, end) + (end < plain.length ? '...' : '')
-        results.push({ chapterIndex: i, chapterTitle: ch.title, snippet })
+      let startIndex = 0
+      while (startIndex < plain.length) {
+        const idx = plain.toLowerCase().indexOf(q.toLowerCase(), startIndex)
+        if (idx >= 0) {
+          const start = Math.max(0, idx - 20)
+          const end = Math.min(plain.length, idx + q.length + 40)
+          const snippet = (start > 0 ? '...' : '') + plain.substring(start, end) + (end < plain.length ? '...' : '')
+          results.push({ chapterIndex: i, chapterTitle: ch.title, snippet })
+          startIndex = idx + q.length
+        } else {
+          break
+        }
       }
     }
     searchResults.value = results
@@ -501,19 +508,27 @@ const doPageFlip = (dir: 'left' | 'right', action: () => void) => {
 }
 
 const nextPage = () => {
-  if (flipLock) return
+  const now = Date.now()
+  if (flipLock) {
+    if (now - lastFlipTime < 150) return
+    flipLock = false
+  }
+  lastFlipTime = now
   const step = (pageMode.value === 'double' && doublePageStep.value === 2) ? 2 : 1
   if (currentPage.value < totalPages.value - step) {
     doPageFlip('left', () => { currentPage.value += step })
-  } else if (currentPage.value < totalPages.value - 1 && step === 2) {
-    doPageFlip('left', () => { currentPage.value += 1 })
   } else {
     slideToNextChapter()
   }
 }
 
 const prevPage = () => {
-  if (flipLock) return
+  const now = Date.now()
+  if (flipLock) {
+    if (now - lastFlipTime < 150) return
+    flipLock = false
+  }
+  lastFlipTime = now
   const step = (pageMode.value === 'double' && doublePageStep.value === 2) ? 2 : 1
   if (currentPage.value >= step) {
     doPageFlip('right', () => { currentPage.value -= step })
@@ -572,7 +587,7 @@ const handleKeydown = (e: KeyboardEvent) => {
     handleGoBack()
     return
   }
-  if (showMenu.value && k !== ' ' && c !== 'Space') return
+  if (showMenu.value) return
   if (nextKeys.value.includes(k) || nextKeys.value.includes(c)) { e.preventDefault(); nextPage() }
   else if (prevKeys.value.includes(k) || prevKeys.value.includes(c)) { e.preventDefault(); prevPage() }
 }
@@ -791,7 +806,7 @@ onUnmounted(() => {
             </div>
             <div class="flex gap-4">
               <button @click="disableKeyHints" class="flex-1 py-3 px-4 glass-card rounded-xl text-sm font-medium hover:bg-white/10 transition-all border border-white/5">不再提示</button>
-              <button @click="closeKeyHints" class="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all">我知道了</button>
+              <button @click="closeKeyHints" class="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all">我知道了 (ESC)</button>
             </div>
           </div>
         </div>

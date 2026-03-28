@@ -341,7 +341,8 @@ ipcMain.handle('dialog:openImage', async () => {
 ipcMain.handle('shell:openPath', async (_, path: string) => shell.openPath(path))
 
 ipcMain.handle('win:setAspectRatio', async (_, ratio: number) => {
-  mainWindow?.setAspectRatio(ratio)
+  // We explicitly do not call setAspectRatio(ratio) to avoid locking the window.
+  // We only resize it to match the ratio once upon user request.
   if (mainWindow) { const [w] = mainWindow.getSize(); mainWindow.setSize(w, Math.round(w / ratio)) }
 })
 
