@@ -247,7 +247,9 @@ if (!gotTheLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    } else if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
     }
