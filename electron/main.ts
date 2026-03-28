@@ -359,6 +359,12 @@ ipcMain.handle('win:setFullScreen', async (_, isFull: boolean) => {
   }
 })
 
+ipcMain.handle('win:setAlwaysOnTop', async (_, isTop: boolean) => {
+  if (mainWindow) {
+    mainWindow.setAlwaysOnTop(isTop)
+  }
+})
+
 // Requirement 4: hide/show titlebar overlay via height
 ipcMain.handle('win:setControlsVisible', async (_, visible: boolean) => {
   if (mainWindow && process.platform === 'win32') {

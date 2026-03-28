@@ -27,6 +27,13 @@ const showRules = ref(false)
 const isImmersive = ref(false)
 const bgImage = ref('')
 const blurAmount = ref(0)
+const isAlwaysOnTop = ref(false)
+
+const toggleAlwaysOnTop = () => {
+  isAlwaysOnTop.value = !isAlwaysOnTop.value
+  window.electronAPI.win.setAlwaysOnTop(isAlwaysOnTop.value)
+  saveSetting('reader_alwaysOnTop', isAlwaysOnTop.value ? 'true' : 'false')
+}
 
 // Styling
 const fontSize = ref(20)
@@ -144,6 +151,10 @@ const loadSettings = async () => {
         if (s.key === 'reader_pageMode') pageMode.value = (s.value === 'double' ? 'double' : 'single')
         if (s.key === 'reader_doublePageStep') doublePageStep.value = (parseInt(s.value) === 1 ? 1 : 2)
         if (s.key === 'hideKeyHints') showKeyHints.value = (s.value !== 'true')
+        if (s.key === 'reader_alwaysOnTop') {
+          isAlwaysOnTop.value = (s.value === 'true')
+          window.electronAPI.win.setAlwaysOnTop(isAlwaysOnTop.value)
+        }
         if (s.key === 'reader_nextKeys') { try { nextKeys.value = JSON.parse(s.value) } catch (_) {} }
         if (s.key === 'reader_prevKeys') { try { prevKeys.value = JSON.parse(s.value) } catch (_) {} }
         if (s.key === 'reader_blurAmount') blurAmount.value = parseInt(s.value) || 0
@@ -828,6 +839,10 @@ onUnmounted(() => {
             <button @click="handleGoBack" class="m-back">← 书架</button>
             <div class="m-title">{{ book?.title }}</div>
             <div class="m-acts">
+              <button @click="toggleAlwaysOnTop" class="m-capsule-btn" :class="{ 'is-active': isAlwaysOnTop }">
+                <div class="mc-track"><div class="mc-thumb"></div></div>
+                <span>置顶</span>
+              </button>
               <button @click="toggleImmersiveMode" class="m-btn">{{ isImmersive ? '⊡ 退出全屏' : '⛶ 全屏' }}</button>
               <button @click="openPanel('search')" class="m-btn" :class="{active:showSearch}">🔍 搜索</button>
               <button @click="openPanel('rules')" class="m-btn" :class="{active:showRules}">📝 替换</button>
@@ -1077,7 +1092,14 @@ onUnmounted(() => {
 .m-back { background:none; border:1px solid rgba(255,255,255,0.15); color:white; font-size:15px; font-weight:600; cursor:pointer; padding:10px 20px; border-radius:12px; transition:all .2s; white-space:nowrap; }
 .m-back:hover { background:rgba(255,255,255,0.1); }
 .m-title { font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:25%; opacity:0.8; }
-.m-acts { flex:1; display:flex; justify-content:flex-end; gap:12px; }
+.m-acts { flex:1; display:flex; justify-content:flex-end; align-items:center; gap:12px; }
+.m-capsule-btn { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:30px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.7); cursor:pointer; font-size:13px; font-weight:700; transition:all .2s; }
+.m-capsule-btn:hover { background:rgba(255,255,255,0.15); color:white; }
+.m-capsule-btn.is-active { background:rgba(59,130,246,0.15); border-color:#3b82f6; color:#60a5fa; }
+.m-capsule-btn .mc-track { position:relative; width:28px; height:16px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.2); transition:all .2s; }
+.m-capsule-btn.is-active .mc-track { background:#3b82f6; border-color:#3b82f6; }
+.m-capsule-btn .mc-thumb { position:absolute; left:2px; top:2px; width:10px; height:10px; border-radius:50%; background:white; transition:all .2s; }
+.m-capsule-btn.is-active .mc-thumb { transform:translateX(12px); }
 .m-btn { padding:10px 20px; border-radius:12px; font-size:14px; font-weight:700; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:white; cursor:pointer; transition:all .2s; }
 .m-btn:hover { background:rgba(59,130,246,0.2); }
 .m-btn.active { background:#3b82f6; border-color:#3b82f6; box-shadow:0 4px 12px rgba(59,130,246,0.3); }
