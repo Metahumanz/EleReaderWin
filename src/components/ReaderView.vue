@@ -47,8 +47,8 @@ const fontColor = ref('#e2e8f0')
 const coverColor = ref('#0f172a')
 const systemFonts = ref<string[]>([])
 
-// Flip mode: 'slide' or 'cover'
-const flipMode = ref<'slide' | 'cover'>('slide')
+// Flip mode: 'slide', 'cover', or 'curl'
+const flipMode = ref<'slide' | 'cover' | 'curl'>('slide')
 
 // Pagination
 const currentPage = ref(0)
@@ -147,7 +147,11 @@ const loadSettings = async () => {
         if (s.key === 'reader_fontColor') fontColor.value = s.value || '#e2e8f0'
         if (s.key === 'reader_coverColor') coverColor.value = s.value || '#0f172a'
         if (s.key === 'bgImage') bgImage.value = s.value || ''
-        if (s.key === 'reader_flipMode') flipMode.value = (s.value === 'cover' ? 'cover' : 'slide')
+        if (s.key === 'reader_flipMode') {
+          if (s.value === 'curl') flipMode.value = 'curl'
+          else if (s.value === 'cover') flipMode.value = 'cover'
+          else flipMode.value = 'slide'
+        }
         if (s.key === 'reader_pageMode') pageMode.value = (s.value === 'double' ? 'double' : 'single')
         if (s.key === 'reader_doublePageStep') doublePageStep.value = (parseInt(s.value) === 1 ? 1 : 2)
         if (s.key === 'hideKeyHints') showKeyHints.value = (s.value !== 'true')
@@ -190,7 +194,7 @@ const updateStyling = () => {
   saveSetting('reader_alignBottom', alignBottom.value ? 'true' : 'false')
   recalc()
 }
-const setFlipMode = (mode: 'slide' | 'cover') => {
+const setFlipMode = (mode: 'slide' | 'cover' | 'curl') => {
   flipMode.value = mode
   saveSetting('reader_flipMode', mode)
 }
@@ -431,7 +435,7 @@ const slideToNextChapter = () => {
   flipLock = true
   suppressAnim.value = true
   
-  if (flipMode.value === 'cover') {
+  if (flipMode.value === 'cover' || flipMode.value === 'curl') {
     if (containerRef.value) snapshotHtml.value = containerRef.value.outerHTML
     sweepDir.value = 'left'
     showingCover.value = true
@@ -469,7 +473,7 @@ const slideToPrevChapter = () => {
     saveProgress()
   }
 
-  if (flipMode.value === 'cover') {
+  if (flipMode.value === 'cover' || flipMode.value === 'curl') {
     if (containerRef.value) snapshotHtml.value = containerRef.value.outerHTML
     sweepDir.value = 'right'
     showingCover.value = true
@@ -503,7 +507,7 @@ const goToChapter = (idx: number, keepMenu = false) => {
 
 // ---- Page navigation ----
 const doPageFlip = (dir: 'left' | 'right', action: () => void) => {
-  if (flipMode.value === 'cover') {
+  if (flipMode.value === 'cover' || flipMode.value === 'curl') {
     if (containerRef.value) snapshotHtml.value = containerRef.value.outerHTML
     sweepDir.value = dir === 'left' ? 'left' : 'right'
     showingCover.value = true
@@ -561,10 +565,39 @@ const handleClick = (e: MouseEvent) => {
   if (t.closest('.m-top') || t.closest('.m-bot') || t.closest('.m-info') ||
       t.closest('.sty-p') || t.closest('.toc-p') || t.closest('.search-p') || t.closest('.rules-p') || t.closest('.copy-modal')) return
   if (showMenu.value) { closeAll(); return }
-  const x = e.clientX, w = window.innerWidth
-  if (x < w * 0.3) prevPage()
-  else if (x > w * 0.7) nextPage()
-  else showMenu.value = true
+  
+  const x = e.clientX, y = e.clientY
+  const w = window.innerWidth, h = window.innerHeight
+  const isCenterCol = x > w / 3 && x < (w / 3) * 2
+  const isCenterRow = y > h / 3 && y < (h / 3) * 2
+
+  if (isCenterCol && isCenterRow) {
+    showMenu.value = true
+  } else if (x < w / 3 || (isCenterCol && y < h / 3)) {
+    prevPage()
+  } else {
+    nextPage()
+  }
+}
+
+let touchStartX = 0
+let touchStartY = 0
+const handleTouchStart = (e: TouchEvent) => {
+  if (showMenu.value) return
+  touchStartX = e.changedTouches[0].screenX
+  touchStartY = e.changedTouches[0].screenY
+}
+
+const handleTouchEnd = (e: TouchEvent) => {
+  if (showMenu.value) return
+  const endX = e.changedTouches[0].screenX
+  const endY = e.changedTouches[0].screenY
+  
+  if (Math.abs(endX - touchStartX) > Math.abs(endY - touchStartY) * 1.5) {
+    const diff = endX - touchStartX
+    if (diff < -50) nextPage()
+    else if (diff > 50) prevPage()
+  }
 }
 
 const handleContextMenu = (e: MouseEvent) => {
@@ -720,7 +753,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="reader-root" @wheel="handleWheel" @click="handleClick" @contextmenu.prevent="handleContextMenu">
+  <div class="reader-root" :style="{ touchAction: showMenu ? 'auto' : 'none' }" @wheel="handleWheel" @click="handleClick" @contextmenu.prevent="handleContextMenu" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
     <!-- Separate background layer to allow blurring without blurring text -->
     <div class="fixed inset-0 pointer-events-none transition-all duration-300 transform-gpu origin-center" 
          :style="[readerBgStyle, { filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none', transform: blurAmount > 0 ? 'scale(1.1)' : 'none' }]"
@@ -733,14 +766,14 @@ onUnmounted(() => {
 
     <template v-else>
       <!-- Reveal animation overlay -->
-      <div v-if="showingCover" class="snapshot-layer" :class="sweepDir">
+      <div v-if="showingCover" class="snapshot-layer" :class="[sweepDir, flipMode === 'curl' ? 'is-curl' : '']">
         <div class="absolute inset-0 pointer-events-none transform-gpu origin-center" 
              :style="[readerBgStyle, { filter: blurAmount > 0 ? `blur(${blurAmount}px)` : 'none', transform: blurAmount > 0 ? 'scale(1.1)' : 'none' }]"
              :class="{ 'bg-[#0f172a]': !bgImage }"></div>
         <div v-if="bgImage && blurAmount > 0" class="absolute inset-0 pointer-events-none bg-black/40"></div>
         <div class="absolute inset-0" v-html="snapshotHtml"></div>
       </div>
-      <div v-if="showingCover" class="sweep-line" :class="sweepDir"></div>
+      <div v-if="showingCover" class="sweep-line" :class="[sweepDir, flipMode === 'curl' ? 'is-curl' : '']"></div>
 
       <!-- Three-container carousel -->
       <div class="carousel" :class="{ sliding: carouselSliding }" :style="{ transform: carouselTransform }">
@@ -871,6 +904,7 @@ onUnmounted(() => {
                 翻页:
                 <button @click="setFlipMode('slide')" class="ft-btn" :class="{ftActive: flipMode==='slide'}">平移</button>
                 <button @click="setFlipMode('cover')" class="ft-btn" :class="{ftActive: flipMode==='cover'}">覆盖</button>
+                <button @click="setFlipMode('curl')" class="ft-btn" :class="{ftActive: flipMode==='curl'}">仿真</button>
               </span>
             </div>
           </div>
@@ -1048,8 +1082,9 @@ onUnmounted(() => {
 
 /* Reveal Transition Overlay */
 .snapshot-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; }
-.snapshot-layer.left { animation: clipLeft 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.snapshot-layer.right { animation: clipRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+/* Cover mode animations */
+.snapshot-layer.left:not(.is-curl) { animation: clipLeft 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.snapshot-layer.right:not(.is-curl) { animation: clipRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes clipLeft {
   from { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
   to { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
@@ -1061,10 +1096,45 @@ onUnmounted(() => {
 
 .sweep-line { position: absolute; top: 0; bottom: 0; width: 40px; z-index: 21; pointer-events: none; background: linear-gradient(to right, transparent, rgba(0,0,0,0.15), rgba(0,0,0,0.4), transparent); }
 .theme-n .sweep-line { background: linear-gradient(to right, transparent, rgba(255,255,255,0.05), rgba(255,255,255,0.15), transparent); }
-.sweep-line.left { animation: sweepLeft 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.sweep-line.right { animation: sweepRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.sweep-line.left:not(.is-curl) { animation: sweepLeft 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.sweep-line.right:not(.is-curl) { animation: sweepRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes sweepLeft { from { transform: translateX(100vw); } to { transform: translateX(-40px); } }
 @keyframes sweepRight { from { transform: translateX(-40px); } to { transform: translateX(100vw); } }
+
+/* Curl mode animations */
+.sweep-line.is-curl {
+  width: 120px;
+  background: linear-gradient(to right, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 40%, transparent 100%);
+  transform-origin: center;
+}
+.theme-n .sweep-line.is-curl {
+  background: linear-gradient(to right, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 40%, transparent 100%);
+}
+
+.sweep-line.is-curl.left { animation: curlSweepLeft 0.55s ease-in-out forwards; }
+@keyframes curlSweepLeft {
+  0% { transform: translateX(100vw) rotate(15deg) scaleX(1); opacity: 1; }
+  100% { transform: translateX(-50vw) rotate(15deg) scaleX(2.5); opacity: 0; }
+}
+
+.sweep-line.is-curl.right { animation: curlSweepRight 0.55s ease-in-out forwards; background: linear-gradient(to left, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 40%, transparent 100%); }
+.theme-n .sweep-line.is-curl.right { background: linear-gradient(to left, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 40%, transparent 100%); }
+@keyframes curlSweepRight {
+  0% { transform: translateX(-50vw) rotate(-15deg) scaleX(1); opacity: 1; }
+  100% { transform: translateX(100vw) rotate(-15deg) scaleX(2.5); opacity: 0; }
+}
+
+.snapshot-layer.is-curl.left { animation: curlClipLeft 0.55s ease-in-out forwards; }
+@keyframes curlClipLeft {
+  0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  100% { clip-path: polygon(0 0, -20% 0, -50% 100%, 0 100%); }
+}
+
+.snapshot-layer.is-curl.right { animation: curlClipRight 0.55s ease-in-out forwards; }
+@keyframes curlClipRight {
+  0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  100% { clip-path: polygon(100% 0, 120% 0, 150% 100%, 100% 100%); }
+}
 
 /* Carousel */
 .carousel { display:flex; width:300vw; height:100%; transform:translateX(-100vw); z-index:1; }

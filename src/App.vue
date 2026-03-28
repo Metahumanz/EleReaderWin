@@ -59,8 +59,20 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
 const cancelQuit = () => { showQuitConfirm.value = false }
 const confirmQuit = () => { window.electronAPI.app.quit() }
 
+let touchStartX = 0
+let touchEndX = 0
+const handleTouchStart = (e: TouchEvent) => { touchStartX = e.changedTouches[0].screenX }
+const handleTouchEnd = (e: TouchEvent) => {
+  touchEndX = e.changedTouches[0].screenX
+  if (touchEndX - touchStartX > 80 && currentView.value !== 'bookshelf' && currentView.value !== 'reader') {
+    goBack()
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('touchstart', handleTouchStart, { passive: true })
+  window.addEventListener('touchend', handleTouchEnd, { passive: true })
   try {
     const sc = await window.electronAPI.db.query("SELECT value FROM settings WHERE key = 'sidebarCollapsed'")
     if (sc[0] && sc[0].value === 'true') isSidebarCollapsed.value = true
@@ -79,6 +91,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('touchstart', handleTouchStart)
+  window.removeEventListener('touchend', handleTouchEnd)
 })
 </script>
 
