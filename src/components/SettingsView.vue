@@ -50,6 +50,7 @@ const loadSettings = async () => {
       if (s.key === 'webdavSync') webdavSync.value = s.value === 'true'
       if (s.key === 'autoOpenLastRead') autoOpenLastRead.value = s.value === 'true'
       if (s.key === 'silentUpdate') silentUpdate.value = s.value === 'true'
+      if (s.key === 'hideKeyHints') showKeyHints.value = s.value !== 'true'
     }
   } catch (e) { console.error(e) }
 }
@@ -272,7 +273,7 @@ onMounted(async () => {
           </div>
           <label class="flex items-center cursor-pointer relative">
             <input type="checkbox" v-model="showKeyHints" @change="toggleKeyHints" class="peer sr-only" />
-            <div class="w-10 h-5 bg-black/10 dark:bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-black/10 dark:border-white/10 peer-checked:border-[#005fb8]"></div>
+            <div class="w-10 h-5 bg-black/10 dark:bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[20px] after:absolute after:top-1 after:left-1 after:bg-slate-600 dark:after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-3 after:w-3 peer-checked:after:scale-125 after:transition-all peer-checked:bg-[#005fb8] border border-black/30 dark:border-white/30 peer-checked:border-[#005fb8]"></div>
           </label>
         </div>
 
@@ -286,7 +287,7 @@ onMounted(async () => {
           </div>
           <label class="flex items-center cursor-pointer relative">
             <input type="checkbox" v-model="autoOpenLastRead" @change="toggleAutoOpenLastRead" class="peer sr-only" />
-            <div class="w-10 h-5 bg-black/10 dark:bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-black/10 dark:border-white/10 peer-checked:border-[#005fb8]"></div>
+            <div class="w-10 h-5 bg-black/10 dark:bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[20px] after:absolute after:top-1 after:left-1 after:bg-slate-600 dark:after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-3 after:w-3 peer-checked:after:scale-125 after:transition-all peer-checked:bg-[#005fb8] border border-black/30 dark:border-white/30 peer-checked:border-[#005fb8]"></div>
           </label>
         </div>
 
@@ -339,7 +340,7 @@ onMounted(async () => {
                 </div>
                 <label class="flex items-center cursor-pointer relative">
                   <input type="checkbox" v-model="webdavSync" @change="saveWebdav" class="peer sr-only" />
-                  <div class="w-10 h-5 bg-black/10 dark:bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-black/10 dark:border-white/10 peer-checked:border-[#005fb8]"></div>
+                  <div class="w-10 h-5 bg-black/10 dark:bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[20px] after:absolute after:top-1 after:left-1 after:bg-slate-600 dark:after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-3 after:w-3 peer-checked:after:scale-125 after:transition-all peer-checked:bg-[#005fb8] border border-black/30 dark:border-white/30 peer-checked:border-[#005fb8]"></div>
                 </label>
               </div>
 
@@ -463,7 +464,7 @@ onMounted(async () => {
           </div>
           <label class="flex items-center cursor-pointer relative">
             <input type="checkbox" v-model="silentUpdate" @change="toggleSilentUpdate" class="peer sr-only" />
-            <div class="w-10 h-5 bg-black/10 dark:bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#005fb8] border border-black/10 dark:border-white/10 peer-checked:border-[#005fb8]"></div>
+            <div class="w-10 h-5 bg-black/10 dark:bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[20px] after:absolute after:top-1 after:left-1 after:bg-slate-600 dark:after:bg-white/80 peer-checked:after:bg-white after:rounded-full after:h-3 after:w-3 peer-checked:after:scale-125 after:transition-all peer-checked:bg-[#005fb8] border border-black/30 dark:border-white/30 peer-checked:border-[#005fb8]"></div>
           </label>
         </div>
       </div>
